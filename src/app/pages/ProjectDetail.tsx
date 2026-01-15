@@ -80,7 +80,7 @@ export function ProjectDetail() {
             <h1 className="text-gray-900 mb-2 text-2xl font-bold">{project.title}</h1>
             <p className="text-gray-600">{project.description}</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Link to={`/projects/${projectId}/dashboard`}>
               <Button variant="outline" className="gap-2">
                 <BarChart3 className="w-4 h-4" />
@@ -177,7 +177,7 @@ export function ProjectDetail() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <Link to={`/projects/${projectId}/chapter/${chapter.id}`}>
                       <Button variant="outline" size="sm" className="w-full gap-2 hover:border-purple-300 hover:bg-purple-50 hover:text-purple-700">
                         <FileText className="w-4 h-4" />

@@ -248,15 +248,15 @@ function PageHeader({
   isApplyingToAll: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between">
+    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-900 flex items-center gap-3">
           <Palette className="w-8 h-8" />
           导演风格设定
         </h1>
-        <p className="text-gray-600 mt-1">为整个项目设定统一的视觉风格，将自动应用到所有AI提示词</p>
+        <p className="text-gray-600 mt-1 text-sm md:text-base">为整个项目设定统一的视觉风格，将自动应用到所有AI提示词</p>
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button variant="outline" onClick={onReset} className="gap-2">
           <RotateCcw className="w-4 h-4" />
           重置
