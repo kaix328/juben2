@@ -1,7 +1,7 @@
 {
   "name": "screenplay-creator",
   "private": false,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
   "description": "现代化的剧本创作与分镜管理系统 - AI辅助创作工具",
   "author": "kaix328",

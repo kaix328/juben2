@@ -1,0 +1,401 @@
+/**
+ * iPad 专属样式优化
+ */
+
+/* ============ iPad 基础适配 ============ */
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  /* iPad 专属根字体大小 */
+  html {
+    font-size: 16px;
+  }
+  
+  /* iPad 容器宽度 */
+  .container-ipad {
+    max-width: 100%;
+    padding: 0 24px;
+  }
+}
+
+/* ============ iPad 网格布局 ============ */
+
+/* iPad Mini / 标准 iPad 竖屏 - 2列 */
+@media (min-width: 768px) and (max-width: 834px) and (orientation: portrait) {
+  .responsive-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+  
+  .card-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* iPad 横屏 / iPad Pro 竖屏 - 3列 */
+@media (min-width: 768px) and (max-width: 1024px) and (orientation: landscape),
+       (min-width: 834px) and (max-width: 1024px) and (orientation: portrait) {
+  .responsive-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+  
+  .card-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* iPad Pro 12.9" 横屏 - 4列 */
+@media (min-width: 1024px) and (max-width: 1366px) and (orientation: landscape) {
+  .responsive-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+  }
+  
+  .card-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* ============ iPad 侧边栏布局 ============ */
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  /* 显示侧边栏 */
+  .sidebar-ipad {
+    display: flex;
+    flex-direction: column;
+    width: 280px;
+    border-right: 1px solid #e5e7eb;
+    background: white;
+  }
+  
+  /* iPad Pro 使用更宽的侧边栏 */
+  @media (min-width: 1024px) {
+    .sidebar-ipad {
+      width: 320px;
+    }
+  }
+  
+  /* 主内容区域 */
+  .main-content-ipad {
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
+  }
+  
+  /* 分栏布局 */
+  .split-layout-ipad {
+    display: flex;
+    height: 100vh;
+  }
+}
+
+/* ============ iPad 卡片优化 ============ */
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  .card-ipad {
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+  
+  .card-ipad-large {
+    padding: 24px;
+    border-radius: 16px;
+  }
+  
+  /* 卡片标题 */
+  .card-ipad h3 {
+    font-size: 18px;
+    font-weight: 600;
+  }
+  
+  /* 卡片描述 */
+  .card-ipad p {
+    font-size: 15px;
+    line-height: 1.6;
+  }
+}
+
+/* ============ iPad 导航优化 ============ */
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  /* 隐藏移动端底部导航 */
+  .mobile-bottom-nav {
+    display: none;
+  }
+  
+  /* 显示 iPad 顶部导航 */
+  .nav-ipad {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+    padding: 0 24px;
+    background: white;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  
+  /* iPad 导航项 */
+  .nav-ipad-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 500;
+    color: #6b7280;
+    transition: all 0.2s;
+  }
+  
+  .nav-ipad-item:hover {
+    background: #f3f4f6;
+    color: #111827;
+  }
+  
+  .nav-ipad-item.active {
+    background: #eef2ff;
+    color: #6366f1;
+  }
+}
+
+/* ============ iPad 模态框优化 ============ */
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  .modal-ipad {
+    max-width: 600px;
+    max-height: 80vh;
+    margin: auto;
+    border-radius: 16px;
+  }
+  
+  /* iPad Pro 使用更大的模态框 */
+  @media (min-width: 1024px) {
+    .modal-ipad {
+      max-width: 720px;
+    }
+  }
+  
+  /* 全屏模态框 */
+  .modal-ipad-fullscreen {
+    max-width: 90vw;
+    max-height: 90vh;
+  }
+}
+
+/* ============ iPad 表单优化 ============ */
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  .form-ipad {
+    max-width: 600px;
+    margin: 0 auto;
+  }
+  
+  .form-ipad .form-group {
+    margin-bottom: 24px;
+  }
+  
+  .form-ipad label {
+    font-size: 15px;
+    font-weight: 500;
+    margin-bottom: 8px;
+  }
+  
+  .form-ipad input,
+  .form-ipad textarea,
+  .form-ipad select {
+    font-size: 16px;
+    padding: 12px 16px;
+    border-radius: 8px;
+  }
+  
+  /* 两列表单布局 */
+  .form-ipad-two-column {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+  }
+}
+
+/* ============ iPad 工具栏优化 ============ */
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  .toolbar-ipad {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 24px;
+    background: white;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  
+  .toolbar-ipad button {
+    padding: 10px 20px;
+    font-size: 15px;
+    border-radius: 8px;
+  }
+  
+  /* 工具栏分组 */
+  .toolbar-ipad-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px;
+    background: #f3f4f6;
+    border-radius: 8px;
+  }
+}
+
+/* ============ iPad 列表优化 ============ */
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  .list-ipad {
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #e5e7eb;
+  }
+  
+  .list-ipad-item {
+    display: flex;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid #f3f4f6;
+    background: white;
+    transition: background 0.15s;
+  }
+  
+  .list-ipad-item:hover {
+    background: #f9fafb;
+  }
+  
+  .list-ipad-item:last-child {
+    border-bottom: none;
+  }
+}
+
+/* ============ iPad 分屏支持 ============ */
+
+/* iPad 分屏模式（1/3 屏幕） */
+@media (min-width: 320px) and (max-width: 438px) {
+  .split-view-compact {
+    grid-template-columns: 1fr;
+  }
+  
+  .sidebar-ipad {
+    display: none;
+  }
+}
+
+/* iPad 分屏模式（1/2 屏幕） */
+@media (min-width: 438px) and (max-width: 678px) {
+  .split-view-half {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .sidebar-ipad {
+    width: 240px;
+  }
+}
+
+/* iPad 分屏模式（2/3 屏幕） */
+@media (min-width: 678px) and (max-width: 1024px) {
+  .split-view-large {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .sidebar-ipad {
+    width: 280px;
+  }
+}
+
+/* ============ iPad 触摸优化 ============ */
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  /* 增大触摸目标 */
+  button,
+  a,
+  .clickable {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* 触摸反馈 */
+  .touch-feedback-ipad {
+    transition: transform 0.1s, background 0.15s;
+  }
+  
+  .touch-feedback-ipad:active {
+    transform: scale(0.98);
+  }
+}
+
+/* ============ iPad 键盘支持 ============ */
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  /* 键盘快捷键提示 */
+  .keyboard-hint-ipad {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    background: #f3f4f6;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: monospace;
+    color: #6b7280;
+  }
+}
+
+/* ============ iPad 性能优化 ============ */
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  /* 使用 GPU 加速 */
+  .gpu-accelerated-ipad {
+    transform: translateZ(0);
+    will-change: transform;
+  }
+  
+  /* 优化滚动性能 */
+  .scroll-container-ipad {
+    -webkit-overflow-scrolling: touch;
+    overflow-y: auto;
+  }
+  
+  /* 减少重绘 */
+  .optimized-ipad {
+    contain: layout style paint;
+  }
+}
+
+/* ============ iPad 暗色模式 ============ */
+
+@media (min-width: 768px) and (max-width: 1024px) and (prefers-color-scheme: dark) {
+  .sidebar-ipad {
+    background: #1f2937;
+    border-right-color: #374151;
+  }
+  
+  .nav-ipad {
+    background: #1f2937;
+    border-bottom-color: #374151;
+  }
+  
+  .card-ipad {
+    background: #1f2937;
+    border-color: #374151;
+  }
+  
+  .list-ipad {
+    border-color: #374151;
+  }
+  
+  .list-ipad-item {
+    background: #1f2937;
+    border-bottom-color: #374151;
+  }
+  
+  .list-ipad-item:hover {
+    background: #111827;
+  }
+}

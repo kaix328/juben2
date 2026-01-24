@@ -1,0 +1,463 @@
+/**
+ * 横屏优化样式
+ */
+
+/* ============ 横屏基础适配 ============ */
+
+@media (orientation: landscape) {
+  /* 横屏时调整根字体 */
+  html {
+    font-size: 14px;
+  }
+  
+  /* 横屏容器 */
+  .landscape-container {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+  }
+}
+
+/* ============ 手机横屏 ============ */
+
+@media (max-width: 896px) and (orientation: landscape) {
+  /* 隐藏底部导航 */
+  .mobile-bottom-nav {
+    display: none;
+  }
+  
+  /* 使用顶部导航 */
+  .mobile-top-nav-landscape {
+    display: flex;
+    align-items: center;
+    height: 48px;
+    padding: 0 16px;
+    background: white;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  
+  /* 两栏布局 */
+  .landscape-two-column {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    height: calc(100vh - 48px);
+  }
+  
+  /* 左侧面板 */
+  .landscape-left-panel {
+    overflow-y: auto;
+    padding: 16px;
+    border-right: 1px solid #e5e7eb;
+  }
+  
+  /* 右侧面板 */
+  .landscape-right-panel {
+    overflow-y: auto;
+    padding: 16px;
+  }
+  
+  /* 紧凑的卡片 */
+  .card-landscape-compact {
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  
+  /* 紧凑的表单 */
+  .form-landscape-compact input,
+  .form-landscape-compact textarea {
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+  
+  /* 紧凑的按钮 */
+  .button-landscape-compact {
+    padding: 8px 16px;
+    font-size: 14px;
+  }
+}
+
+/* ============ iPad 横屏 ============ */
+
+@media (min-width: 768px) and (max-width: 1024px) and (orientation: landscape) {
+  /* 三栏布局 */
+  .landscape-three-column {
+    display: grid;
+    grid-template-columns: 280px 1fr 320px;
+    height: 100vh;
+  }
+  
+  /* 左侧边栏 */
+  .landscape-sidebar-left {
+    overflow-y: auto;
+    padding: 20px;
+    background: #f9fafb;
+    border-right: 1px solid #e5e7eb;
+  }
+  
+  /* 主内容区 */
+  .landscape-main-content {
+    overflow-y: auto;
+    padding: 24px;
+  }
+  
+  /* 右侧边栏 */
+  .landscape-sidebar-right {
+    overflow-y: auto;
+    padding: 20px;
+    background: #f9fafb;
+    border-left: 1px solid #e5e7eb;
+  }
+  
+  /* 网格布局 */
+  .landscape-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+  
+  /* 列表布局 */
+  .landscape-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+}
+
+/* ============ 横屏编辑器优化 ============ */
+
+@media (orientation: landscape) {
+  /* 编辑器分屏 */
+  .editor-landscape {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    height: 100%;
+  }
+  
+  /* 编辑区域 */
+  .editor-landscape-edit {
+    padding: 20px;
+    overflow-y: auto;
+    border-right: 1px solid #e5e7eb;
+  }
+  
+  /* 预览区域 */
+  .editor-landscape-preview {
+    padding: 20px;
+    overflow-y: auto;
+    background: #f9fafb;
+  }
+  
+  /* 工具栏横向排列 */
+  .editor-toolbar-landscape {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: white;
+    border-bottom: 1px solid #e5e7eb;
+    overflow-x: auto;
+  }
+}
+
+/* ============ 横屏模态框优化 ============ */
+
+@media (orientation: landscape) {
+  .modal-landscape {
+    max-width: 80vw;
+    max-height: 85vh;
+    margin: auto;
+  }
+  
+  /* 横向布局的模态框 */
+  .modal-landscape-horizontal {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  
+  /* 全屏模态框 */
+  .modal-landscape-fullscreen {
+    width: 95vw;
+    height: 90vh;
+  }
+}
+
+/* ============ 横屏导航优化 ============ */
+
+@media (orientation: landscape) {
+  /* 顶部导航 */
+  .nav-landscape-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 56px;
+    padding: 0 20px;
+    background: white;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  
+  /* 导航项横向排列 */
+  .nav-landscape-items {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  
+  /* 紧凑的导航项 */
+  .nav-landscape-item {
+    padding: 8px 16px;
+    font-size: 14px;
+    border-radius: 6px;
+  }
+}
+
+/* ============ 横屏表单优化 ============ */
+
+@media (orientation: landscape) {
+  /* 表单两列布局 */
+  .form-landscape-two-column {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+  }
+  
+  /* 表单三列布局 */
+  .form-landscape-three-column {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  
+  /* 表单行内布局 */
+  .form-landscape-inline {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  
+  .form-landscape-inline label {
+    min-width: 100px;
+    margin-bottom: 0;
+  }
+  
+  .form-landscape-inline input,
+  .form-landscape-inline select {
+    flex: 1;
+  }
+}
+
+/* ============ 横屏卡片优化 ============ */
+
+@media (orientation: landscape) {
+  /* 卡片横向布局 */
+  .card-landscape-horizontal {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  
+  .card-landscape-horizontal .card-image {
+    width: 120px;
+    height: 120px;
+    flex-shrink: 0;
+  }
+  
+  .card-landscape-horizontal .card-content {
+    flex: 1;
+    min-width: 0;
+  }
+  
+  /* 紧凑的卡片网格 */
+  .card-grid-landscape {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+  }
+}
+
+/* ============ 横屏列表优化 ============ */
+
+@media (orientation: landscape) {
+  /* 列表项横向布局 */
+  .list-item-landscape {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+  }
+  
+  .list-item-landscape .list-item-content {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  
+  .list-item-landscape .list-item-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+}
+
+/* ============ 横屏媒体播放器优化 ============ */
+
+@media (orientation: landscape) {
+  /* 全屏视频播放器 */
+  .video-player-landscape {
+    width: 100vw;
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 9999;
+    background: black;
+  }
+  
+  /* 视频控制栏 */
+  .video-controls-landscape {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 16px 24px;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
+  }
+  
+  /* 图片查看器 */
+  .image-viewer-landscape {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100vw;
+    height: 100vh;
+  }
+}
+
+/* ============ 横屏分镜优化 ============ */
+
+@media (orientation: landscape) {
+  /* 分镜时间轴横向 */
+  .storyboard-timeline-landscape {
+    display: flex;
+    gap: 12px;
+    padding: 16px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  
+  .storyboard-frame-landscape {
+    width: 160px;
+    flex-shrink: 0;
+  }
+  
+  /* 分镜编辑器 */
+  .storyboard-editor-landscape {
+    display: grid;
+    grid-template-columns: 200px 1fr 280px;
+    height: 100vh;
+  }
+  
+  .storyboard-editor-landscape .frame-list {
+    overflow-y: auto;
+    border-right: 1px solid #e5e7eb;
+  }
+  
+  .storyboard-editor-landscape .canvas-area {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f3f4f6;
+  }
+  
+  .storyboard-editor-landscape .properties-panel {
+    overflow-y: auto;
+    border-left: 1px solid #e5e7eb;
+  }
+}
+
+/* ============ 横屏性能优化 ============ */
+
+@media (orientation: landscape) {
+  /* GPU 加速 */
+  .landscape-gpu-accelerated {
+    transform: translateZ(0);
+    will-change: transform;
+  }
+  
+  /* 优化滚动 */
+  .landscape-scroll-container {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+  
+  /* 减少重绘 */
+  .landscape-optimized {
+    contain: layout style paint;
+  }
+}
+
+/* ============ 横屏暗色模式 ============ */
+
+@media (orientation: landscape) and (prefers-color-scheme: dark) {
+  .landscape-sidebar-left,
+  .landscape-sidebar-right {
+    background: #1f2937;
+    border-color: #374151;
+  }
+  
+  .landscape-main-content {
+    background: #111827;
+  }
+  
+  .nav-landscape-top {
+    background: #1f2937;
+    border-bottom-color: #374151;
+  }
+  
+  .editor-landscape-preview {
+    background: #1f2937;
+  }
+}
+
+/* ============ 横屏过渡动画 ============ */
+
+@media (orientation: landscape) {
+  .landscape-transition {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  /* 淡入动画 */
+  .landscape-fade-in {
+    animation: landscapeFadeIn 0.3s ease-out;
+  }
+  
+  @keyframes landscapeFadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  /* 滑入动画 */
+  .landscape-slide-in {
+    animation: landscapeSlideIn 0.3s ease-out;
+  }
+  
+  @keyframes landscapeSlideIn {
+    from {
+      transform: translateX(-20px);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+}

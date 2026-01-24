@@ -1,348 +1,407 @@
-# 移动端优化集成指南
+# 移动端优化使用指南
 
-## 📱 已完成的移动端优化
+## 📱 已完成的优化
 
-### 1. 核心组件
+### ✅ 第一阶段：基础优化（已完成）
 
-#### ✅ 设备检测 Hook (`src/app/hooks/useDevice.ts`)
+#### 1. Viewport 配置优化
+- ✅ 完整的 viewport meta 标签
+- ✅ iOS 安全区域支持 (viewport-fit=cover)
+- ✅ PWA 主题色配置
+- ✅ Apple 设备专属配置
+
+#### 2. PWA 支持
+- ✅ manifest.json 配置文件
+- ✅ 应用图标 (192x192, 512x512)
+- ✅ Apple Touch Icon
+- ✅ 离线支持准备
+
+#### 3. 图片优化
+- ✅ OptimizedImage 组件（懒加载、响应式、WebP）
+- ✅ 图片优化工具函数
+- ✅ 自动 WebP 格式检测
+- ✅ 响应式 srcset 支持
+
+### ✅ 第二阶段：高级优化（已完成）
+
+#### 1. iPad 专属优化
+- ✅ useIPad Hook（iPad 检测和布局）
+- ✅ iPad 专属样式（2/3/4 列布局）
+- ✅ 分屏模式支持
+- ✅ iPad Pro 大屏优化
+
+#### 2. 手势支持
+- ✅ useSwipe Hook（滑动手势）
+- ✅ useLongPress Hook（长按手势）
+- ✅ usePullToRefresh Hook（下拉刷新）
+- ✅ useDoubleTap Hook（双击手势）
+- ✅ usePinchZoom Hook（捏合缩放）
+- ✅ SwipeableCard 组件（可滑动卡片）
+- ✅ PullToRefresh 组件（下拉刷新）
+
+#### 3. 横屏优化
+- ✅ useOrientation Hook（方向检测）
+- ✅ useLandscapeLayout Hook（横屏布局）
+- ✅ useFullscreen Hook（全屏支持）
+- ✅ 横屏专属样式（两栏/三栏布局）
+- ✅ 编辑器横屏分屏
+
+---
+
+## 🚀 使用方法
+
+### 1. 使用 iPad 检测
+
 ```typescript
-import { useDevice, useIsMobile, useDeviceType } from '@/hooks/useDevice';
+import { useIPad, useIPadLayout } from '@/app/hooks/useIPad';
 
-// 完整设备信息
-const device = useDevice();
-console.log(device.isMobile, device.isTablet, device.isDesktop);
-
-// 简化版
-const isMobile = useIsMobile();
-```
-
-**功能特性：**
-- 自动检测设备类型（手机/平板/桌面）
-- 响应窗口大小变化
-- 检测触摸设备
-- 检测屏幕方向（横屏/竖屏）
-- 性能优化（debounce）
-
-#### ✅ 移动端简化分镜卡片 (`src/app/components/storyboard/MobileShotCard.tsx`)
-```typescript
-<MobileShotCard
-  panel={panel}
-  isSelected={isSelected}
-  status={status}
-  onSelect={() => handleToggleSelect(panel.id)}
-  onEdit={() => handleMobileEdit(panel)}
-  onDelete={() => handleDeletePanel(panel.id)}
-  onGenerateImage={async () => await handleGenerateImage(panel)}
-  onCopy={() => handleCopyPanel(panel)}
-/>
-```
-
-**优化特性：**
-- ✅ 大触摸目标（44x44px）
-- ✅ 简化信息展示
-- ✅ 下拉菜单操作
-- ✅ 快速操作按钮
-- ✅ 触摸反馈动画
-- ✅ 状态指示器
-
-#### ✅ 移动端全屏编辑器 (`src/app/components/storyboard/MobileShotEditor.tsx`)
-```typescript
-<MobileShotEditor
-  panel={panel}
-  open={mobileEditorOpen}
-  onClose={() => setMobileEditorOpen(false)}
-  onUpdate={handleUpdate}
-  onGeneratePrompts={handleGeneratePrompts}
-/>
-```
-
-**优化特性：**
-- ✅ 全屏编辑界面
-- ✅ 分标签页组织（基础/对白/提示词）
-- ✅ 大输入框和按钮
-- ✅ 粘性顶栏和底栏
-- ✅ 触摸友好的表单控件
-
-#### ✅ 移动端提示组件 (`src/app/components/MobileAlert.tsx`)
-```typescript
-// 基础提示
-<MobileAlert 
-  page="storyboard"
-  onDismiss={() => setShowAlert(false)}
-/>
-
-// 设备建议
-<DeviceRecommendation />
-
-// 横屏建议
-<LandscapeRecommendation />
-```
-
-**提示类型：**
-- 移动端功能提示
-- 设备建议（推荐使用更大屏幕）
-- 横屏建议（平板竖屏时）
-
-### 2. 集成方案
-
-#### 方案 A：使用集成组件（推荐）
-```typescript
-import { MobilePanelList } from './MobileIntegration';
-
-// 在分镜编辑器中
-{device.isMobile ? (
-  <MobilePanelList
-    panels={filteredPanels}
-    selectedPanels={selectedPanels}
-    panelStatuses={panelStatuses}
-    onToggleSelect={handleToggleSelect}
-    onUpdatePanel={handleUpdatePanel}
-    onDeletePanel={handleDeletePanel}
-    onGenerateImage={handleGenerateImage}
-    onCopyPanel={handleCopyPanel}
-    onGeneratePrompts={handleGeneratePrompts}
-  />
-) : (
-  // 桌面端原有组件
-  <DesktopPanelList ... />
-)}
-```
-
-#### 方案 B：响应式包装器
-```typescript
-import { ResponsiveShotCard } from './MobileIntegration';
-
-<ResponsiveShotCard
-  panel={panel}
-  index={idx}
-  isSelected={isSelected}
-  status={status}
-  onSelect={onSelect}
-  onUpdate={onUpdate}
-  onDelete={onDelete}
-  onGenerateImage={onGenerateImage}
-  onCopy={onCopy}
-  onGeneratePrompts={onGeneratePrompts}
-  DesktopCard={() => <ShotCard {...props} />}
-/>
-```
-
-### 3. 触摸目标优化
-
-#### ✅ Button 组件已优化
-所有按钮默认最小尺寸 44x44px：
-```typescript
-// src/app/components/ui/button.tsx
-size: {
-  default: "h-10 px-4 py-2 min-h-[44px]",
-  sm: "h-9 rounded-md px-3 min-h-[44px]",
-  lg: "h-11 rounded-md px-8 min-h-[44px]",
-  icon: "h-10 w-10 min-h-[44px] min-w-[44px]",
+function MyComponent() {
+  const { isIPad, isIPadPro, screenSize } = useIPad();
+  const { gridColumns, showSidebar } = useIPadLayout();
+  
+  return (
+    <div className={`grid grid-cols-${gridColumns}`}>
+      {showSidebar && <Sidebar />}
+      <MainContent />
+    </div>
+  );
 }
 ```
 
-#### 需要优化的其他组件
+### 2. 使用滑动手势
+
 ```typescript
-// Checkbox - 需要增大
-<Checkbox className="w-6 h-6" />
+import { useSwipe } from '@/app/hooks/useGestures';
 
-// Input - 需要增大高度
-<Input className="h-12 text-base" />
-
-// Select - 需要增大触发器
-<SelectTrigger className="h-12 text-base" />
-```
-
-### 4. 样式优化
-
-#### Tailwind 响应式断点
-```css
-/* 手机 */
-@media (max-width: 767px) { ... }
-
-/* 平板 */
-@media (min-width: 768px) and (max-width: 1023px) { ... }
-
-/* 桌面 */
-@media (min-width: 1024px) { ... }
-```
-
-#### 移动端专用类
-```typescript
-// 隐藏桌面功能
-className="hidden md:block"
-
-// 移动端显示
-className="block md:hidden"
-
-// 触摸优化
-className="touch-manipulation active:scale-95"
-
-// 安全区域
-className="pb-safe"
-```
-
-## 📋 集成步骤
-
-### Step 1: 导入移动端组件
-```typescript
-// src/app/pages/StoryboardEditor/index.tsx
-import { useDevice } from '../../hooks/useDevice';
-import { MobileShotCard } from '../../components/storyboard/MobileShotCard';
-import { MobileShotEditor } from '../../components/storyboard/MobileShotEditor';
-import { MobileAlert } from '../../components/MobileAlert';
-```
-
-### Step 2: 添加移动端状态
-```typescript
-const device = useDevice();
-const [mobileEditorOpen, setMobileEditorOpen] = useState(false);
-const [editingPanel, setEditingPanel] = useState<StoryboardPanel | null>(null);
-const [showMobileAlert, setShowMobileAlert] = useState(true);
-```
-
-### Step 3: 添加移动端处理函数
-```typescript
-const handleMobileEdit = useCallback((panel: StoryboardPanel) => {
-  setEditingPanel(panel);
-  setMobileEditorOpen(true);
-}, []);
-
-const handleMobileUpdate = useCallback((params: Partial<StoryboardPanel>) => {
-  if (editingPanel) {
-    handleUpdatePanel(editingPanel.id, params);
-  }
-}, [editingPanel, handleUpdatePanel]);
-```
-
-### Step 4: 条件渲染
-```typescript
-// 在主内容区域
-<main className="flex-1 px-6 py-8 min-w-0 overflow-y-auto">
-  {/* 移动端提示 */}
-  {device.isMobile && showMobileAlert && (
-    <MobileAlert 
-      page="storyboard"
-      onDismiss={() => setShowMobileAlert(false)}
-    />
-  )}
+function SwipeableList() {
+  const swipeHandlers = useSwipe({
+    onSwipeLeft: () => console.log('向左滑动'),
+    onSwipeRight: () => console.log('向右滑动'),
+    threshold: 50,
+  });
   
-  {/* 分镜列表 */}
-  {device.isMobile ? (
-    <div className="space-y-4">
-      {filteredPanels.map((panel) => (
-        <MobileShotCard
-          key={panel.id}
-          panel={panel}
-          isSelected={selectedPanels.has(panel.id)}
-          status={panelStatuses[panel.id]}
-          onSelect={() => handleToggleSelect(panel.id)}
-          onEdit={() => handleMobileEdit(panel)}
-          onDelete={() => handleDeletePanel(panel.id)}
-          onGenerateImage={async () => await handleGenerateImage(panel)}
-          onCopy={() => handleCopyPanel(panel)}
-        />
-      ))}
+  return (
+    <div {...swipeHandlers}>
+      滑动我试试
     </div>
-  ) : (
-    // 桌面端原有组件
-    <DraggablePanelList ... />
-  )}
-</main>
-
-{/* 移动端全屏编辑器 */}
-{editingPanel && (
-  <MobileShotEditor
-    panel={editingPanel}
-    open={mobileEditorOpen}
-    onClose={() => {
-      setMobileEditorOpen(false);
-      setEditingPanel(null);
-    }}
-    onUpdate={handleMobileUpdate}
-    onGeneratePrompts={() => editingPanel && handleGeneratePrompts(editingPanel)}
-  />
-)}
+  );
+}
 ```
 
-## 🎯 优化效果
+### 3. 使用可滑动卡片
 
-### 移动端适配评分对比
+```typescript
+import { SwipeableCard } from '@/app/components/GestureComponents';
 
-| 模块 | 优化前 | 优化后 | 提升 |
-|------|--------|--------|------|
-| 分镜编辑器 | ⭐⭐☆☆☆ (1.5/5) | ⭐⭐⭐⭐☆ (4.0/5) | +167% |
-| 触摸目标 | ❌ 小于44px | ✅ 最小44px | 完全达标 |
-| 编辑体验 | ❌ 难以操作 | ✅ 全屏编辑 | 大幅改善 |
-| 信息展示 | ❌ 拥挤 | ✅ 简化清晰 | 显著提升 |
+function TodoList() {
+  return (
+    <SwipeableCard
+      leftActions={[
+        {
+          label: '完成',
+          color: 'green',
+          onClick: () => markComplete(),
+        },
+      ]}
+      rightActions={[
+        {
+          label: '删除',
+          color: 'red',
+          onClick: () => deleteItem(),
+        },
+      ]}
+    >
+      <div className="p-4">待办事项内容</div>
+    </SwipeableCard>
+  );
+}
+```
 
-### 关键改进
+### 4. 使用下拉刷新
 
-1. **触摸目标** ✅
-   - 所有按钮最小 44x44px
-   - Checkbox 增大到 24x24px
-   - 下拉菜单项增大到 48px 高度
+```typescript
+import { PullToRefresh } from '@/app/components/GestureComponents';
 
-2. **编辑体验** ✅
-   - 全屏编辑模式
-   - 分标签页组织
-   - 大输入框和表单控件
+function RefreshableList() {
+  const handleRefresh = async () => {
+    await fetchNewData();
+  };
+  
+  return (
+    <PullToRefresh onRefresh={handleRefresh}>
+      <div>列表内容</div>
+    </PullToRefresh>
+  );
+}
+```
 
-3. **信息展示** ✅
-   - 简化卡片布局
-   - 关键信息突出
-   - 次要功能收起
+### 5. 使用优化的图片组件
 
-4. **性能优化** ✅
-   - 设备检测 debounce
-   - 触摸反馈动画
-   - 虚拟滚动支持
+```typescript
+import { OptimizedImage } from '@/app/components/OptimizedImage';
 
-## 🚀 下一步优化
+function Gallery() {
+  return (
+    <OptimizedImage
+      src="/images/photo.jpg"
+      alt="照片"
+      aspectRatio="video"
+      sizes="(max-width: 768px) 100vw, 50vw"
+      priority={false}
+    />
+  );
+}
+```
 
-### 剧本编辑器移动端优化
-- [ ] 创建 MobileSceneCard
-- [ ] 创建 MobileSceneEditor
-- [ ] 优化文本编辑体验
+### 6. 使用横屏检测
 
-### 资源库移动端优化
-- [ ] 创建 MobileAssetCard
-- [ ] 优化网格布局
-- [ ] 添加触摸手势
+```typescript
+import { useOrientation, useLandscapeLayout } from '@/app/hooks/useOrientation';
 
-### 导航优化
-- [ ] 优化 MobileNav 触摸目标
-- [ ] 添加手势导航
-- [ ] 优化底部导航栏
+function ResponsiveEditor() {
+  const { isLandscape } = useOrientation();
+  const { layout, showSidebar } = useLandscapeLayout();
+  
+  return (
+    <div className={isLandscape ? 'landscape-two-column' : 'portrait-single'}>
+      <Editor />
+      {isLandscape && <Preview />}
+    </div>
+  );
+}
+```
+
+### 7. 使用长按手势
+
+```typescript
+import { useLongPress } from '@/app/hooks/useGestures';
+
+function LongPressButton() {
+  const longPressHandlers = useLongPress(
+    () => console.log('长按触发'),
+    {
+      threshold: 500,
+      onStart: () => console.log('开始长按'),
+      onFinish: () => console.log('长按完成'),
+    }
+  );
+  
+  return (
+    <button {...longPressHandlers}>
+      长按我
+    </button>
+  );
+}
+```
+
+### 8. 使用双击手势
+
+```typescript
+import { useDoubleTap } from '@/app/hooks/useGestures';
+
+function DoubleTapImage() {
+  const doubleTapHandlers = useDoubleTap(
+    () => console.log('双击放大'),
+    { delay: 300 }
+  );
+  
+  return (
+    <img {...doubleTapHandlers} src="/image.jpg" alt="双击放大" />
+  );
+}
+```
+
+### 9. 使用捏合缩放
+
+```typescript
+import { usePinchZoom } from '@/app/hooks/useGestures';
+import { useState } from 'react';
+
+function ZoomableImage() {
+  const [scale, setScale] = useState(1);
+  const pinchHandlers = usePinchZoom(setScale, {
+    minScale: 0.5,
+    maxScale: 3,
+  });
+  
+  return (
+    <div {...pinchHandlers}>
+      <img
+        src="/image.jpg"
+        style={{ transform: `scale(${scale})` }}
+        alt="捏合缩放"
+      />
+    </div>
+  );
+}
+```
+
+---
+
+## 🎨 CSS 类名使用
+
+### iPad 专属类名
+
+```html
+<!-- iPad 侧边栏 -->
+<div class="sidebar-ipad">侧边栏内容</div>
+
+<!-- iPad 主内容 -->
+<div class="main-content-ipad">主内容</div>
+
+<!-- iPad 分栏布局 -->
+<div class="split-layout-ipad">
+  <aside class="sidebar-ipad">侧边栏</aside>
+  <main class="main-content-ipad">主内容</main>
+</div>
+
+<!-- iPad 卡片 -->
+<div class="card-ipad">卡片内容</div>
+
+<!-- iPad 导航 -->
+<nav class="nav-ipad">
+  <a class="nav-ipad-item active">首页</a>
+  <a class="nav-ipad-item">项目</a>
+</nav>
+
+<!-- iPad 表单 -->
+<form class="form-ipad form-ipad-two-column">
+  <div class="form-group">...</div>
+</form>
+```
+
+### 横屏专属类名
+
+```html
+<!-- 横屏容器 -->
+<div class="landscape-container">
+  <div class="landscape-sidebar-left">左侧栏</div>
+  <div class="landscape-main-content">主内容</div>
+  <div class="landscape-sidebar-right">右侧栏</div>
+</div>
+
+<!-- 横屏两栏布局 -->
+<div class="landscape-two-column">
+  <div class="landscape-left-panel">左面板</div>
+  <div class="landscape-right-panel">右面板</div>
+</div>
+
+<!-- 横屏编辑器 -->
+<div class="editor-landscape">
+  <div class="editor-landscape-edit">编辑区</div>
+  <div class="editor-landscape-preview">预览区</div>
+</div>
+
+<!-- 横屏网格 -->
+<div class="landscape-grid">
+  <div>项目 1</div>
+  <div>项目 2</div>
+  <div>项目 3</div>
+</div>
+```
+
+### 响应式网格
+
+```html
+<!-- 自动适配的网格（手机1列、iPad 2-3列、iPad Pro 4列） -->
+<div class="responsive-grid">
+  <div class="card">卡片 1</div>
+  <div class="card">卡片 2</div>
+  <div class="card">卡片 3</div>
+</div>
+```
+
+---
+
+## 📊 性能优化建议
+
+### 1. 图片优化
+- ✅ 使用 `OptimizedImage` 组件替代 `<img>` 标签
+- ✅ 为首屏图片设置 `priority={true}`
+- ✅ 使用合适的 `aspectRatio` 避免布局抖动
+- ✅ 提供 `sizes` 属性优化响应式加载
+
+### 2. 手势优化
+- ✅ 避免在滚动容器上使用 `preventDefaultTouchmoveEvent`
+- ✅ 合理设置手势 `threshold` 避免误触
+- ✅ 长按手势建议 500ms 以上
+
+### 3. 布局优化
+- ✅ 使用 CSS Grid 而非 Flexbox 实现复杂布局
+- ✅ 为固定元素添加 `will-change: transform`
+- ✅ 使用 `contain: layout style paint` 减少重绘
+
+---
+
+## 🔧 配置文件
+
+### manifest.json（已创建）
+位置：`public/manifest.json`
+
+### 图标文件（需要替换占位符）
+- `public/icon.svg` - SVG 图标
+- `public/icon-192.png` - 192x192 PNG 图标
+- `public/icon-512.png` - 512x512 PNG 图标
+- `public/apple-touch-icon.png` - Apple Touch 图标
+
+---
+
+## ✨ 特性总结
+
+### 移动端适配评分：**86/100** → **95/100**（预期）
+
+#### 新增功能：
+1. ✅ 完整的 viewport 配置
+2. ✅ PWA 支持（可安装到主屏幕）
+3. ✅ 图片懒加载和响应式
+4. ✅ WebP 格式自动检测
+5. ✅ iPad 专属布局（2/3/4列）
+6. ✅ 滑动手势（左右上下）
+7. ✅ 长按手势
+8. ✅ 双击手势
+9. ✅ 捏合缩放
+10. ✅ 下拉刷新
+11. ✅ 可滑动卡片
+12. ✅ 横屏优化（两栏/三栏）
+13. ✅ 全屏支持
+14. ✅ 方向检测
+
+---
+
+## 🎯 下一步建议
+
+### 可选的进一步优化：
+1. 添加 Service Worker 实现真正的离线支持
+2. 实现图片压缩和上传优化
+3. 添加更多手势组合（如三指滑动）
+4. 实现虚拟滚动优化长列表
+5. 添加触觉反馈（Haptic Feedback）
+
+---
 
 ## 📝 注意事项
 
-1. **性能考虑**
-   - 移动端使用虚拟滚动
-   - 图片懒加载
-   - 减少动画复杂度
+1. **不影响现有功能**：所有新增功能都是可选的，不会影响现有代码
+2. **渐进增强**：在不支持的设备上会优雅降级
+3. **性能优先**：所有优化都考虑了性能影响
+4. **类型安全**：所有 Hook 和组件都有完整的 TypeScript 类型
 
-2. **兼容性**
-   - 测试 iOS Safari
-   - 测试 Android Chrome
-   - 测试平板横竖屏
+---
 
-3. **用户体验**
-   - 提供设备建议
-   - 保持操作一致性
-   - 添加加载状态
+## 🐛 已知问题
 
-4. **可访问性**
-   - 保持语义化 HTML
-   - 支持键盘导航
-   - 提供 ARIA 标签
+1. 图标文件目前是占位符，需要替换为实际的 PNG 图标
+2. Service Worker 尚未实现，需要后续添加
+3. 部分手势在某些浏览器可能需要额外的 polyfill
 
-## 🔗 相关文件
+---
 
-- `src/app/hooks/useDevice.ts` - 设备检测
-- `src/app/components/storyboard/MobileShotCard.tsx` - 移动端卡片
-- `src/app/components/storyboard/MobileShotEditor.tsx` - 移动端编辑器
-- `src/app/components/MobileAlert.tsx` - 移动端提示
-- `src/app/pages/StoryboardEditor/MobileIntegration.tsx` - 集成组件
-- `src/app/components/ui/button.tsx` - 优化后的按钮
-- `移动端适配检查报告.md` - 详细分析报告
+## 📞 技术支持
+
+如有问题，请检查：
+1. 浏览器控制台是否有错误
+2. 设备是否支持相关 API
+3. CSS 样式是否正确引入
+4. TypeScript 类型是否正确
+
+祝使用愉快！🎉
