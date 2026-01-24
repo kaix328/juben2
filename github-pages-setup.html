@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub Pages 自动配置助手</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+            animation: slideUp 0.5s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .subtitle {
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .step {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+
+        .step-number {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 30px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .step-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .step-content {
+            color: #666;
+            line-height: 1.6;
+            margin-left: 40px;
+        }
+
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+            text-decoration: none;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            margin-top: 30px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+            border: none;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .countdown {
+            text-align: center;
+            margin-top: 20px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .countdown span {
+            color: #667eea;
+            font-weight: bold;
+            font-size: 24px;
+        }
+
+        .success {
+            background: #d4edda;
+            border-color: #28a745;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            text-align: center;
+            display: none;
+        }
+
+        .links {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+
+        .link-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            margin-bottom: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            text-decoration: none;
+            color: #333;
+            transition: background 0.2s;
+        }
+
+        .link-item:hover {
+            background: #e9ecef;
+        }
+
+        .link-icon {
+            font-size: 24px;
+            margin-right: 15px;
+        }
+
+        .link-text {
+            flex: 1;
+        }
+
+        .link-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .link-url {
+            font-size: 12px;
+            color: #666;
+            word-break: break-all;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+
+            .step-content {
+                margin-left: 0;
+                margin-top: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 GitHub Pages 配置助手</h1>
+        <p class="subtitle">自动引导您完成 GitHub Pages 配置</p>
+
+        <div class="step">
+            <div class="step-title">
+                <span class="step-number">1</span>
+                点击下方按钮
+            </div>
+            <div class="step-content">
+                将自动打开 GitHub Pages 配置页面
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-title">
+                <span class="step-number">2</span>
+                选择部署源
+            </div>
+            <div class="step-content">
+                在 "Source" 下拉菜单中选择 <strong>"GitHub Actions"</strong>
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-title">
+                <span class="step-number">3</span>
+                保存设置
+            </div>
+            <div class="step-content">
+                点击 <strong>"Save"</strong> 按钮完成配置
+            </div>
+        </div>
+
+        <button class="btn" onclick="openConfig()">
+            🎯 立即配置 GitHub Pages
+        </button>
+
+        <div class="countdown" id="countdown" style="display: none;">
+            将在 <span id="timer">5</span> 秒后自动打开配置页面...
+        </div>
+
+        <div class="success" id="success">
+            ✅ 配置页面已打开！请在新标签页中完成配置。
+        </div>
+
+        <div class="links">
+            <h3 style="margin-bottom: 15px; color: #333;">📚 相关链接</h3>
+            
+            <a href="https://github.com/kaix328/juben2" target="_blank" class="link-item">
+                <span class="link-icon">📦</span>
+                <div class="link-text">
+                    <div class="link-title">GitHub 仓库</div>
+                    <div class="link-url">https://github.com/kaix328/juben2</div>
+                </div>
+            </a>
+
+            <a href="https://github.com/kaix328/juben2/actions" target="_blank" class="link-item">
+                <span class="link-icon">⚙️</span>
+                <div class="link-text">
+                    <div class="link-title">部署状态</div>
+                    <div class="link-url">https://github.com/kaix328/juben2/actions</div>
+                </div>
+            </a>
+
+            <a href="https://kaix328.github.io/juben2/" target="_blank" class="link-item">
+                <span class="link-icon">🌐</span>
+                <div class="link-text">
+                    <div class="link-title">网站地址（部署后可用）</div>
+                    <div class="link-url">https://kaix328.github.io/juben2/</div>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <script>
+        function openConfig() {
+            const configUrl = 'https://github.com/kaix328/juben2/settings/pages';
+            
+            // 显示成功消息
+            document.getElementById('success').style.display = 'block';
+            
+            // 打开配置页面
+            window.open(configUrl, '_blank');
+            
+            // 3秒后也打开 Actions 页面
+            setTimeout(() => {
+                window.open('https://github.com/kaix328/juben2/actions', '_blank');
+            }, 3000);
+        }
+
+        // 页面加载5秒后自动打开
+        let countdown = 5;
+        const countdownEl = document.getElementById('countdown');
+        const timerEl = document.getElementById('timer');
+        
+        setTimeout(() => {
+            countdownEl.style.display = 'block';
+            
+            const interval = setInterval(() => {
+                countdown--;
+                timerEl.textContent = countdown;
+                
+                if (countdown <= 0) {
+                    clearInterval(interval);
+                    openConfig();
+                }
+            }, 1000);
+        }, 2000);
+    </script>
+</body>
+</html>
