@@ -2,8 +2,8 @@
   "name": "剧本创作系统",
   "short_name": "剧本创作",
   "description": "AI辅助剧本创作与分镜管理工具 - 支持剧本编辑、分镜管理、资源库等功能",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "/juben2/",
+  "scope": "/juben2/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#6366f1",
@@ -16,7 +16,7 @@
   "dir": "ltr",
   "icons": [
     {
-      "src": "/icon.svg",
+      "src": "/juben2/icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
@@ -24,13 +24,13 @@
   ],
   "screenshots": [
     {
-      "src": "/screenshot-mobile.png",
+      "src": "/juben2/screenshot-mobile.png",
       "sizes": "390x844",
       "type": "image/png",
       "form_factor": "narrow"
     },
     {
-      "src": "/screenshot-desktop.png",
+      "src": "/juben2/screenshot-desktop.png",
       "sizes": "1920x1080",
       "type": "image/png",
       "form_factor": "wide"
@@ -41,10 +41,10 @@
       "name": "新建项目",
       "short_name": "新建",
       "description": "快速创建新项目",
-      "url": "/#/new",
+      "url": "/juben2/#/new",
       "icons": [
         {
-          "src": "/icon-192.png",
+          "src": "/juben2/icon-192.png",
           "sizes": "192x192"
         }
       ]
