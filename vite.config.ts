@@ -6,8 +6,8 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   // 使用环境变量控制base路径，默认为根路径
   // Docker部署: VITE_BASE_PATH=/
-  // GitHub Pages: VITE_BASE_PATH=/juben/
-  base: process.env.VITE_BASE_PATH || '/',
+  // GitHub Pages: VITE_BASE_PATH=/juben2/
+  base: process.env.VITE_BASE_PATH || '/juben2/',
   plugins: [
     // The React and Tailwind plugins are both required for Make, even if
     // Tailwind is not being actively used – do not remove them
