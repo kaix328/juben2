@@ -4,6 +4,8 @@ import { useEffect, Suspense, lazy } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import * as Sentry from '@sentry/react';
+import { DndProvider } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
 import { Layout } from './components/Layout';
 import { ProjectLayout } from './components/ProjectLayout';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -184,9 +186,10 @@ export default function App() {
     <ErrorBoundary fallback={<GlobalErrorFallback />}>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider defaultTheme="light">
-          <HashRouter>
-            <Toaster position="top-center" richColors />
-            <SentryRoutes>
+          <DndProvider backend={HTML5Backend}>
+            <HashRouter>
+              <Toaster position="top-center" richColors />
+              <SentryRoutes>
           <Route path="/" element={<Layout />}>
             {/* 书架页面 */}
             <Route index element={
@@ -271,8 +274,9 @@ export default function App() {
             {/* 404 重定向 */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
-          </SentryRoutes>
-          </HashRouter>
+            </SentryRoutes>
+            </HashRouter>
+          </DndProvider>
         </ThemeProvider>
         {/* React Query DevTools - 仅在开发环境显示 */}
         {process.env.NODE_ENV === 'development' && (
