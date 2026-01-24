@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import {
     Shirt, Plus, Search, Trash2, Tag, X,
-    Sparkles, ArrowLeft, Edit, Copy, RotateCw
+    Sparkles, ArrowLeft, Edit, Copy, RotateCw, Users
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PromptEngine } from '../../utils/promptEngine';
+import { enhanceCostumeDescription } from '../../utils/descriptionEnhancer';
+import { ClickableImage } from '../ImagePreviewDialog';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -105,6 +107,45 @@ export function CostumeTab({
             toast.success('已复制到剪切板');
         };
 
+        // 🆕 AI智能生成提示词（带描述增强）
+        const handleAIGenerate = () => {
+            // 1. 检查描述
+            if (!costume.description) {
+                toast.error('请先填写服饰描述');
+                return;
+            }
+            
+            // 2. 检查导演风格（可选）
+            if (!project?.directorStyle) {
+                toast.warning('未设定导演风格，将使用默认风格生成');
+            }
+            
+            // 3. 获取关联角色
+            const character = assets.characters.find(c => c.id === costume.characterId);
+            
+            if (!character) {
+                toast.info('💡 提示：关联角色后，生成的服饰图会包含角色特征，更加准确');
+            }
+            
+            // 4. 🆕 智能增强描述
+            const enhancedDescription = enhanceCostumeDescription(
+                costume.description || '',
+                costume.style
+            );
+            
+            // 创建增强后的服饰对象
+            const enhancedCostume = {
+                ...costume,
+                description: enhancedDescription,
+            };
+            
+            // 5. 生成提示词
+            const engine = new PromptEngine(project?.directorStyle);
+            const result = engine.forCostume(enhancedCostume, character);
+            handleUpdateCostume(costume.id, { aiPrompt: result.positive });
+            toast.success('✨ 服饰提示词已生成！已智能延展描述');
+        };
+
         const handleOptimize = () => {
             if (!project?.directorStyle) {
                 toast.error('未设定导演风格，无法优化');
@@ -183,6 +224,36 @@ export function CostumeTab({
                         <div className="space-y-4">
                             <div className="bg-white p-4 rounded-lg border space-y-4">
                                 <h5 className="font-semibold text-gray-700">基本信息</h5>
+                                
+                                {/* 🆕 角色选择器 */}
+                                <div className="space-y-2">
+                                    <Label>关联角色</Label>
+                                    <select
+                                        value={costume.characterId || ''}
+                                        onChange={(e) => handleUpdateCostume(costume.id, { characterId: e.target.value || undefined })}
+                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        <option value="">未关联角色</option>
+                                        {assets.characters.map(char => (
+                                            <option key={char.id} value={char.id}>
+                                                {char.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {costume.characterId && (() => {
+                                        const char = assets.characters.find(c => c.id === costume.characterId);
+                                        return char ? (
+                                            <div className="flex items-center gap-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs">
+                                                <Users className="w-4 h-4 text-blue-600" />
+                                                <span className="text-blue-700">
+                                                    已关联角色：<strong>{char.name}</strong>
+                                                    {char.appearance && ` - ${char.appearance}`}
+                                                </span>
+                                            </div>
+                                        ) : null;
+                                    })()}
+                                </div>
+                                
                                 <div className="space-y-2">
                                     <Label>服饰描述</Label>
                                     <Textarea
@@ -204,11 +275,17 @@ export function CostumeTab({
                                 <Label className="text-xs text-center block" >服饰预览</Label>
                                 <div className="aspect-square bg-gray-50 rounded border border-dashed border-pink-300 overflow-hidden flex items-center justify-center relative group">
                                     {costume.preview ? (
-                                        <img src={costume.preview} className="w-full h-full object-cover" />
+                                        <ClickableImage
+                                            src={costume.preview}
+                                            alt={costume.name}
+                                            className="w-full h-full object-cover"
+                                            containerClassName="w-full h-full"
+                                            immediate
+                                        />
                                     ) : (
                                         <Shirt className="w-16 h-16 text-pink-200" />
                                     )}
-                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
                                         <Edit className="w-8 h-8 text-white" />
                                     </div>
                                 </div>
@@ -233,8 +310,19 @@ export function CostumeTab({
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
+                                                className="h-6 px-2 text-[10px] text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                                                onClick={() => handleAIGenerate()}
+                                                title="基于服饰描述生成全新提示词"
+                                            >
+                                                <Sparkles className="w-3 h-3 mr-1" />
+                                                AI生成
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
                                                 className="h-6 px-2 text-[10px] text-pink-600 hover:text-pink-700 hover:bg-pink-50"
                                                 onClick={() => handleOptimize()}
+                                                title="优化现有提示词"
                                             >
                                                 <RotateCw className="w-3 h-3 mr-1" />
                                                 智能优化

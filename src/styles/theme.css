@@ -128,6 +128,27 @@
     @apply bg-background text-foreground;
   }
 
+  /* 全局禁用按钮点击动画效果 */
+  button,
+  [role="button"],
+  a {
+    -webkit-tap-highlight-color: transparent !important;
+    -webkit-touch-callout: none !important;
+    outline: none !important;
+  }
+  
+  button:active,
+  button:focus,
+  [role="button"]:active,
+  [role="button"]:focus,
+  a:active,
+  a:focus {
+    transform: none !important;
+    scale: none !important;
+    outline: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+  }
+
   /**
   * Default typography styles for HTML elements (h1-h4, p, label, button, input).
   * These are in @layer base, so Tailwind utility classes (like text-sm, text-lg) automatically override them.

@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  juben:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # 构建时环境变量（从宿主机环境或.env文件读取）
+        - VITE_BASE_PATH=${VITE_BASE_PATH:-/}
+    ports:
+      - "80:80"
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - VITE_BASE_PATH=${VITE_BASE_PATH:-/}
+    # 从.env文件加载环境变量（可选）
+    env_file:
+      - .env.production
+    volumes:
+      # 挂载日志目录
+      - ./logs:/var/log/nginx
+      # 持久化数据目录（可选）
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    # 资源限制（可选，根据服务器配置调整）
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+    # 网络配置
+    networks:
+      - juben-network
+
+# 网络定义
+networks:
+  juben-network:
+    driver: bridge

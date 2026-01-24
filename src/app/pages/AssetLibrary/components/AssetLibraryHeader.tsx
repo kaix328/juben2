@@ -1,9 +1,12 @@
 import React from 'react';
 import {
-    Sparkles, Save, Upload, Download, Wand2, RefreshCw, ArrowLeft
+    Sparkles, Save, Upload, Download, Wand2, RefreshCw,
+    Network, BarChart3, Database, Eye
 } from 'lucide-react';
 import { Button } from "../../../components/ui/button";
 import { CardTitle } from "../../../components/ui/card";
+import { Switch } from "../../../components/ui/switch";
+import { Label } from "../../../components/ui/label";
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -12,25 +15,49 @@ import {
     BreadcrumbPage,
     BreadcrumbSeparator,
 } from "../../../components/ui/breadcrumb";
-import { toast } from 'sonner';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "../../../components/ui/alert-dialog";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "../../../components/ui/tooltip";
 
 interface AssetLibraryHeaderProps {
     projectId: string | undefined;
     projectName: string | undefined;
     isExtracting: boolean;
     isSyncing: boolean;
-    isBatchGenerating: boolean;  // 🆕
+    isBatchGenerating: boolean;
     onAIExtractClick: () => void;
     onSyncStyle: () => void;
-    onBatchGenerate: () => void;  // 🆕
+    onBatchGenerate: () => void;
     onSave: () => void;
     onExport: () => void;
     onImportClick: () => void;
-    importInputRef: React.RefObject<HTMLInputElement>;
-    enablePromptOptimization: boolean;
-    setEnablePromptOptimization: (val: boolean) => void;
     groupBy: 'none' | 'tags' | 'source';
     onGroupByChange: (val: 'none' | 'tags' | 'source') => void;
+
+    // New Feature Handlers
+    onShowRelationGraph?: () => void;
+    onShowAnalytics?: () => void;
+    onShowBackupManager?: () => void;
+    onBatchDeduplicate?: () => void;
+    onShowAssetAdvisor?: () => void;
+    
+    // 🆕 提示词预览开关
+    enablePromptPreview?: boolean;
+    onTogglePromptPreview?: (enabled: boolean) => void;
 }
 
 export const AssetLibraryHeader: React.FC<AssetLibraryHeaderProps> = ({
@@ -38,18 +65,22 @@ export const AssetLibraryHeader: React.FC<AssetLibraryHeaderProps> = ({
     projectName,
     isExtracting,
     isSyncing,
-    isBatchGenerating,  // 🆕
+    isBatchGenerating,
     onAIExtractClick,
     onSyncStyle,
-    onBatchGenerate,    // 🆕
+    onBatchGenerate,
     onSave,
     onExport,
     onImportClick,
-    importInputRef,
-    enablePromptOptimization,
-    setEnablePromptOptimization,
     groupBy,
-    onGroupByChange
+    onGroupByChange,
+    onShowRelationGraph,
+    onShowAnalytics,
+    onShowBackupManager,
+    onBatchDeduplicate,
+    onShowAssetAdvisor,
+    enablePromptPreview,
+    onTogglePromptPreview
 }) => {
     return (
         <>
@@ -101,6 +132,110 @@ export const AssetLibraryHeader: React.FC<AssetLibraryHeaderProps> = ({
                     </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                    {/* New Function Buttons */}
+                    {onShowRelationGraph && (
+                        <Button variant="outline" onClick={onShowRelationGraph} className="gap-2">
+                            <Network className="w-4 h-4" />
+                            关系图谱
+                        </Button>
+                    )}
+
+                    {onShowAnalytics && (
+                        <Button variant="outline" onClick={onShowAnalytics} className="gap-2">
+                            <BarChart3 className="w-4 h-4" />
+                            数据分析
+                        </Button>
+                    )}
+
+                    {onShowBackupManager && (
+                        <Button variant="outline" onClick={onShowBackupManager} className="gap-2">
+                            <Database className="w-4 h-4" />
+                            备份管理
+                        </Button>
+                    )}
+
+                    {onBatchDeduplicate && (
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    className="gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                                    disabled={isSyncing}
+                                >
+                                    <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                                    一键整理
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>确定要进行全库整理吗？</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        系统将扫描整个资料库并自动合并相似度极高的角色、场景、道具等。
+                                        <br /><br />
+                                        <span className="text-amber-600 font-medium">⚠️ 注意：</span>
+                                        此操作会自动修复分镜中的引用关系，但为了保险起见，建议在执行前先进行备份。
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>取消</AlertDialogCancel>
+                                    <AlertDialogAction
+                                        onClick={() => {
+                                            console.log('[AssetLibraryHeader] 确认一键整理');
+                                            onBatchDeduplicate();
+                                        }}
+                                        className="bg-indigo-600 hover:bg-indigo-700"
+                                    >
+                                        开始整理
+                                    </AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                    )}
+
+                    {onShowAssetAdvisor && (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        onClick={onShowAssetAdvisor}
+                                        className="border-amber-200 text-amber-700 hover:bg-amber-50"
+                                    >
+                                        <Wand2 className="w-4 h-4" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>AI 优化建议</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    )}
+
+                    <div className="w-[1px] h-8 bg-gray-200 mx-1 hidden lg:block" />
+
+                    {/* 🆕 提示词预览开关 */}
+                    {onTogglePromptPreview && (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <div className="flex items-center gap-2 px-3 py-2 border rounded-md bg-white hover:bg-gray-50 transition-colors">
+                                        <Eye className="w-4 h-4 text-blue-600" />
+                                        <Switch
+                                            checked={enablePromptPreview}
+                                            onCheckedChange={onTogglePromptPreview}
+                                            className="data-[state=checked]:bg-blue-600"
+                                        />
+                                        <Label className="text-xs cursor-pointer">预览</Label>
+                                    </div>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>启用后，生成前会显示提示词预览</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    )}
+
                     <Button
                         variant="outline"
                         onClick={onAIExtractClick}
@@ -111,7 +246,6 @@ export const AssetLibraryHeader: React.FC<AssetLibraryHeaderProps> = ({
                         {isExtracting ? '分析中...' : 'AI 一键提取'}
                     </Button>
 
-                    {/* 🆕 批量生成按钮 */}
                     <Button
                         variant="outline"
                         onClick={onBatchGenerate}
@@ -126,15 +260,6 @@ export const AssetLibraryHeader: React.FC<AssetLibraryHeaderProps> = ({
                         <Upload className="w-4 h-4" />
                         导入
                     </Button>
-                    <input
-                        type="file"
-                        ref={importInputRef}
-                        onChange={(e) => {
-                            // This is handled in the parent, but we keep the ref here
-                        }}
-                        className="hidden"
-                        accept=".json"
-                    />
 
                     <Button variant="outline" onClick={onExport} className="gap-2">
                         <Download className="w-4 h-4" />

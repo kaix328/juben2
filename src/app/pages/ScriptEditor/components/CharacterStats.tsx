@@ -1,11 +1,13 @@
 // 角色对白统计组件
 import React, { memo, useMemo } from 'react';
-import { Users, MessageCircle, BarChart2 } from 'lucide-react';
+import { Users, MessageCircle, BarChart2, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
+import { Button } from '../../../components/ui/button';
 import type { Script } from '../types';
 
 interface CharacterStatsProps {
     script: Script;
+    onClose?: () => void;
 }
 
 interface CharacterStat {
@@ -15,7 +17,7 @@ interface CharacterStat {
     percentage: number;
 }
 
-export const CharacterStats = memo(function CharacterStats({ script }: CharacterStatsProps) {
+export const CharacterStats = memo(function CharacterStats({ script, onClose }: CharacterStatsProps) {
     const stats = useMemo(() => {
         if (!script || script.scenes.length === 0) return [];
 
@@ -77,11 +79,16 @@ export const CharacterStats = memo(function CharacterStats({ script }: Character
 
     return (
         <Card className="bg-gradient-to-r from-indigo-50 to-purple-50 border-indigo-200">
-            <CardHeader className="pb-2">
+            <CardHeader className="pb-2 flex flex-row items-center justify-between">
                 <CardTitle className="flex items-center gap-2 text-indigo-700 text-base">
                     <BarChart2 className="w-5 h-5" />
                     角色对白统计
                 </CardTitle>
+                {onClose && (
+                    <Button variant="ghost" size="sm" onClick={onClose} className="h-6 w-6 p-0 hover:bg-indigo-100">
+                        <X className="w-4 h-4 text-indigo-500" />
+                    </Button>
+                )}
             </CardHeader>
             <CardContent>
                 <div className="space-y-3">

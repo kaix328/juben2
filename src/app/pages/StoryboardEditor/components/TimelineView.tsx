@@ -1,14 +1,18 @@
 import React, { useState, useMemo } from 'react';
 import { ZoomIn, ZoomOut, Clock, Film } from 'lucide-react';
+import { useDrag, useDrop } from 'react-dnd';
+import type { Identifier, XYCoord } from 'dnd-core';
 import { Button } from '../../../components/ui/button';
 import { Slider } from '../../../components/ui/slider';
+import { BlobImage } from '../../../components/LazyImage';
 import type { StoryboardPanel } from '../../../types';
 
 interface TimelineViewProps {
     panels: StoryboardPanel[];
     selectedPanels: Set<string>;
     onToggleSelect: (panelId: string) => void;
-    onUpdateDuration?: (panelId: string, duration: number) => void;  // 🆕 更新时长
+    onUpdateDuration?: (panelId: string, duration: number) => void;
+    onMovePanel?: (dragIndex: number, hoverIndex: number) => void; // 🆕 拖拽排序
     renderListView: () => React.ReactNode;
 }
 
@@ -17,6 +21,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
     selectedPanels,
     onToggleSelect,
     onUpdateDuration,
+    onMovePanel,
     renderListView
 }) => {
     // 🆕 缩放状态（50% - 200%）
@@ -74,6 +79,39 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
         setHoveredPanel(panel);
         const rect = e.currentTarget.getBoundingClientRect();
         setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top - 10 });
+    };
+
+    // 🆕 Resize Handler
+    const handleResizeStart = (e: React.MouseEvent, panel: StoryboardPanel) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const startX = e.clientX;
+        const startDuration = panel.duration || 3;
+        const parentWidth = e.currentTarget.parentElement?.parentElement?.getBoundingClientRect().width || 1000;
+        // Total width of the timeline container in pixels
+        // But better: use the current element's width to determine pixels per second
+        const target = e.currentTarget.parentElement as HTMLElement;
+        const rect = target.getBoundingClientRect();
+        const pixelsPerSecond = rect.width / startDuration;
+
+        const handleMouseMove = (moveEvent: MouseEvent) => {
+            const deltaX = moveEvent.clientX - startX;
+            const deltaDuration = deltaX / pixelsPerSecond;
+            const newDuration = Math.max(0.5, Math.round((startDuration + deltaDuration) * 10) / 10);
+
+            if (onUpdateDuration) {
+                onUpdateDuration(panel.id, newDuration);
+            }
+        };
+
+        const handleMouseUp = () => {
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        };
+
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
     };
 
     return (
@@ -160,27 +198,21 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                             const cumulativeTime = getCumulativeTime(index);
 
                             return (
-                                <div
+                                <TimelineBlock
                                     key={panel.id}
-                                    className={`relative border-r border-gray-400 flex flex-col items-center justify-center cursor-pointer transition-all hover:brightness-95 ${bgColor} ${isSelected ? 'ring-2 ring-blue-500 ring-inset' : ''}`}
-                                    style={{ width: `${widthPercent}%`, minWidth: '50px' }}
-                                    onClick={() => onToggleSelect(panel.id)}
-                                    onMouseEnter={(e) => handleMouseEnter(panel, e)}
+                                    panel={panel}
+                                    index={index}
+                                    widthPercent={widthPercent}
+                                    bgColor={bgColor}
+                                    isSelected={isSelected}
+                                    cumulativeTime={cumulativeTime}
+                                    onToggleSelect={onToggleSelect}
+                                    onMouseEnter={handleMouseEnter}
                                     onMouseLeave={() => setHoveredPanel(null)}
-                                >
-                                    {/* 🆕 缩略预览图 */}
-                                    {panel.generatedImage && (
-                                        <div className="absolute inset-1 opacity-30">
-                                            <img src={panel.generatedImage} alt="" className="w-full h-full object-cover rounded" />
-                                        </div>
-                                    )}
-                                    <div className="relative z-10 text-center px-1">
-                                        <div className="text-xs font-bold text-gray-800">#{panel.panelNumber}</div>
-                                        <div className="text-xs text-gray-600">{panel.duration}s</div>
-                                        {/* 🆕 累计时间码 */}
-                                        <div className="text-xs text-gray-400">{formatTimecode(cumulativeTime)}</div>
-                                    </div>
-                                </div>
+                                    onResizeStart={handleResizeStart}
+                                    movePanel={onMovePanel}
+                                    formatTimecode={formatTimecode}
+                                />
                             );
                         })}
                     </div>
@@ -210,8 +242,8 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                     }}
                 >
                     {hoveredPanel.generatedImage && (
-                        <img
-                            src={hoveredPanel.generatedImage}
+                        <BlobImage
+                            blobId={hoveredPanel.generatedImage}
                             alt={`分镜 ${hoveredPanel.panelNumber}`}
                             className="w-40 h-24 object-cover rounded mb-2"
                         />
@@ -226,6 +258,97 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
 
             {/* 详细列表 */}
             {renderListView()}
+        </div>
+    );
+};
+
+// Sub-component for individual blocks to handle DND hooks properly
+interface TimelineBlockProps {
+    panel: StoryboardPanel;
+    index: number;
+    widthPercent: number;
+    bgColor: string;
+    isSelected: boolean;
+    cumulativeTime: number;
+    onToggleSelect: (id: string) => void;
+    onMouseEnter: (panel: StoryboardPanel, e: React.MouseEvent) => void;
+    onMouseLeave: () => void;
+    onResizeStart: (e: React.MouseEvent, panel: StoryboardPanel) => void;
+    movePanel?: (dragIndex: number, hoverIndex: number) => void;
+    formatTimecode: (seconds: number) => string;
+}
+
+const TimelineBlock: React.FC<TimelineBlockProps> = ({
+    panel, index, widthPercent, bgColor, isSelected, cumulativeTime,
+    onToggleSelect, onMouseEnter, onMouseLeave, onResizeStart, movePanel, formatTimecode
+}) => {
+    const ref = React.useRef<HTMLDivElement>(null);
+
+    const [{ handlerId }, drop] = useDrop<any, void, { handlerId: Identifier | null }>({
+        accept: 'TIMELINE_PANEL',
+        collect(monitor) {
+            return { handlerId: monitor.getHandlerId() };
+        },
+        hover(item: any, monitor) {
+            if (!ref.current) return;
+            const dragIndex = item.index;
+            const hoverIndex = index;
+            if (dragIndex === hoverIndex) return;
+
+            // Horizontal DND sorting logic
+            const hoverBoundingRect = ref.current?.getBoundingClientRect();
+            const hoverMiddleX = (hoverBoundingRect.right - hoverBoundingRect.left) / 2;
+            const clientOffset = monitor.getClientOffset();
+            const hoverClientX = (clientOffset as XYCoord).x - hoverBoundingRect.left;
+
+            if (dragIndex < hoverIndex && hoverClientX < hoverMiddleX) return;
+            if (dragIndex > hoverIndex && hoverClientX > hoverMiddleX) return;
+
+            if (movePanel) {
+                movePanel(dragIndex, hoverIndex);
+                item.index = hoverIndex;
+            }
+        },
+    });
+
+    const [{ isDragging }, drag] = useDrag({
+        type: 'TIMELINE_PANEL',
+        item: () => ({ id: panel.id, index }),
+        collect: (monitor) => ({ isDragging: monitor.isDragging() }),
+    });
+
+    const opacity = isDragging ? 0.5 : 1;
+    if (movePanel) {
+        drag(drop(ref));
+    }
+
+    return (
+        <div
+            ref={ref}
+            className={`relative border-r border-gray-400 flex flex-col items-center justify-center cursor-pointer transition-all hover:brightness-95 ${bgColor} ${isSelected ? 'ring-2 ring-blue-500 ring-inset' : ''}`}
+            style={{ width: `${widthPercent}%`, minWidth: '50px', opacity }}
+            onClick={() => onToggleSelect(panel.id)}
+            onMouseEnter={(e) => onMouseEnter(panel, e)}
+            onMouseLeave={onMouseLeave}
+            data-handler-id={handlerId}
+        >
+            {panel.generatedImage && (
+                <div className="absolute inset-1 opacity-30 pointer-events-none">
+                    <BlobImage blobId={panel.generatedImage} alt="" className="w-full h-full object-cover rounded" />
+                </div>
+            )}
+            <div className="relative z-10 text-center px-1 pointer-events-none">
+                <div className="text-xs font-bold text-gray-800">#{panel.panelNumber}</div>
+                <div className="text-xs text-gray-600">{panel.duration}s</div>
+                <div className="text-xs text-gray-400">{formatTimecode(cumulativeTime)}</div>
+            </div>
+
+            {/* Resize Handle */}
+            <div
+                className="absolute right-0 top-0 bottom-0 w-2 hover:bg-blue-400 cursor-col-resize z-20 opacity-0 hover:opacity-100 transition-opacity"
+                onMouseDown={(e) => onResizeStart(e, panel)}
+                onClick={(e) => e.stopPropagation()} // Prevent selecting when clicking handle
+            />
         </div>
     );
 };

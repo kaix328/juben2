@@ -2,9 +2,12 @@
  * 剧本提取模块
  * 从 aiService.ts 拆分
  */
-import type { ScriptScene, DirectorStyle, Dialogue } from '../../types';
+import type { ScriptScene } from '../../types';
 import { generateId } from '../storage';
+
 import { callDeepSeek, parseJSON } from '../volcApi';
+import { splitTextIntoChunks } from './utils';
+
 
 // 剧本模式配置
 export type ScriptMode = 'movie' | 'tv_drama' | 'short_video' | 'web_series';
@@ -17,8 +20,199 @@ const MODE_DESCRIPTIONS: Record<ScriptMode, string> = {
 };
 
 /**
- * 从原文提取剧本（专业版 - 支持导演风格）
+ * 验证场景数据的完整性
  */
+function validateScene(scene: any): boolean {
+    return !!(
+        scene &&
+        typeof scene === 'object' &&
+        scene.sceneNumber &&
+        scene.location &&
+        typeof scene.location === 'string' &&
+        Array.isArray(scene.dialogues) &&
+        scene.dialogues.every((d: any) =>
+            d &&
+            typeof d === 'object' &&
+            d.character &&
+            typeof d.character === 'string' &&
+            d.lines !== undefined
+        )
+    );
+}
+
+/**
+ * 验证所有场景数据
+ */
+function validateScenes(scenes: any[]): { valid: boolean; errors: string[] } {
+    const errors: string[] = [];
+
+    if (!Array.isArray(scenes)) {
+        errors.push('返回数据不是数组');
+        return { valid: false, errors };
+    }
+
+    if (scenes.length === 0) {
+        errors.push('场景数组为空');
+        return { valid: false, errors };
+    }
+
+    scenes.forEach((scene, index) => {
+        if (!validateScene(scene)) {
+            errors.push(`场景 ${index + 1} 数据不完整`);
+        }
+
+        // 检查对白数据
+        if (Array.isArray(scene.dialogues)) {
+            scene.dialogues.forEach((dialogue: any, dIndex: number) => {
+                if (!dialogue.character) {
+                    errors.push(`场景 ${index + 1} 对白 ${dIndex + 1} 缺少角色名`);
+                }
+                if (dialogue.lines === undefined || dialogue.lines === null) {
+                    errors.push(`场景 ${index + 1} 对白 ${dIndex + 1} 缺少台词内容`);
+                }
+            });
+        }
+    });
+
+    return {
+        valid: errors.length === 0,
+        errors
+    };
+}
+
+/**
+ * 修复不完整的场景数据
+ */
+function fixIncompleteScenes(scenes: any[]): any[] {
+    return scenes.map((scene, index) => {
+        const fixed = { ...scene };
+
+        // 修复缺失的必需字段
+        if (!fixed.sceneNumber) fixed.sceneNumber = index + 1;
+        if (!fixed.location) fixed.location = '未知场景';
+        if (!fixed.timeOfDay) fixed.timeOfDay = '白天';
+        if (!fixed.sceneType) fixed.sceneType = 'INT';
+        if (!Array.isArray(fixed.dialogues)) fixed.dialogues = [];
+        if (!Array.isArray(fixed.characters)) fixed.characters = [];
+        if (!fixed.action) fixed.action = '';
+
+        // 修复对白数据
+        fixed.dialogues = fixed.dialogues.map((d: any) => ({
+            character: d.character || '未知角色',
+            lines: d.lines || '',
+            extension: d.extension,
+            parenthetical: d.parenthetical,
+            isFirstAppearance: d.isFirstAppearance || false,
+            isContinued: d.isContinued || false,
+        }));
+
+        return fixed;
+    });
+}
+
+
+/**
+ * 去重场景（基于场景号和位置）
+ */
+function deduplicateScenes(scenes: ScriptScene[]): ScriptScene[] {
+    const seen = new Set<string>();
+    const unique: ScriptScene[] = [];
+
+    for (const scene of scenes) {
+        const key = `${scene.sceneNumber}-${scene.location}-${scene.timeOfDay}`;
+        if (!seen.has(key)) {
+            seen.add(key);
+            unique.push(scene);
+        }
+    }
+
+    // 重新编号
+    return unique.map((scene, index) => ({
+        ...scene,
+        sceneNumber: index + 1,
+    }));
+}
+
+/**
+ * 清理剧本中的 AI 伪影
+ */
+function cleanScriptText(text: string): string {
+    if (!text) return '';
+    return text
+        .replace(/isFirstAppearance\s*=\s*(true|false)/gi, '') // 移除 isFirstAppearance=true
+        .replace(/isFirstAppearance\s*[:：]\s*(true|false)/gi, '') // 移除 isFirstAppearance:true
+        .replace(/【.*?】/g, '') // 移除可能的标记
+        .trim();
+}
+
+/**
+ * 分段提取剧本生成器（支持暂停/恢复）
+ */
+export async function* extractScriptGenerator(
+    originalText: string,
+    mode: ScriptMode = 'tv_drama',
+    directorStyle?: { artStyle?: string; mood?: string; customPrompt?: string },
+    startIndex: number = 0
+): AsyncGenerator<{ scenes: ScriptScene[]; chunkIndex: number; totalChunks: number }, void, boolean | void> {
+    const MAX_CHUNK_SIZE = 8000;
+
+    // 使用智能分块（基于场景）
+    const chunks = splitTextIntoChunks(originalText, MAX_CHUNK_SIZE);
+
+    console.log(`[scriptExtractor] Generator Start: Total ${chunks.length} chunks, starting from ${startIndex}`);
+
+    for (let i = startIndex; i < chunks.length; i++) {
+        console.log(`[scriptExtractor] Processing chunk ${i + 1}/${chunks.length}...`);
+
+        try {
+            const scenes = await extractScript(chunks[i], mode, directorStyle);
+
+            // Yield results
+            // Check if caller wants to stop (pass true to next()) - typical generator pattern involves checking yield return
+            const shouldStop = yield { scenes, chunkIndex: i, totalChunks: chunks.length };
+
+            if (shouldStop) {
+                console.log('[scriptExtractor] Extraction stopped by user.');
+                return;
+            }
+
+            // Rate limit
+            if (i < chunks.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+        } catch (error) {
+            console.error(`[scriptExtractor] Chunk ${i + 1} failed:`, error);
+            // Optionally yield error status or empty scenes?
+            // For now, let's just log and continue, or maybe re-throw?
+            // Better to just continue for robustness, but maybe alert user?
+            yield { scenes: [], chunkIndex: i, totalChunks: chunks.length };
+        }
+    }
+}
+
+/**
+ * 分段提取剧本（旧版兼容接口）
+ */
+export async function extractScriptInChunks(
+    originalText: string,
+    mode: ScriptMode = 'tv_drama',
+    directorStyle?: { artStyle?: string; mood?: string; customPrompt?: string },
+    onProgress?: (current: number, total: number, message: string) => void
+): Promise<ScriptScene[]> {
+    const generator = extractScriptGenerator(originalText, mode, directorStyle, 0);
+    const allScenes: ScriptScene[] = [];
+
+    for await (const result of generator) {
+        if (result.scenes.length > 0) {
+            allScenes.push(...result.scenes);
+        }
+        if (onProgress) {
+            onProgress(result.chunkIndex + 1, result.totalChunks, `正在提取第 ${result.chunkIndex + 1}/${result.totalChunks} 段...`);
+        }
+    }
+
+    return deduplicateScenes(allScenes);
+}
 export async function extractScript(
     originalText: string,
     mode: ScriptMode = 'tv_drama',
@@ -74,7 +268,14 @@ export async function extractScript(
 - INSERT: 插入镜头
 - INTERCUT: 交叉剪辑
 
-请严格按照以下 JSON 格式返回，不要包含 Markdown 格式标记：
+【重要】请严格按照以下 JSON 格式返回：
+- 必须返回有效的 JSON 数组
+- 不要使用 Markdown 代码块包裹（不要用反引号包裹）
+- 确保所有字符串值中的引号都被正确转义
+- 确保所有对象都有完整的闭合括号
+- 字符串中的换行请使用 \\n 转义
+
+JSON 格式示例：
 [
   {
     "sceneNumber": 1,
@@ -109,11 +310,43 @@ ${originalText.substring(0, 15000)}
 `;
 
     try {
+        console.log('[scriptExtractor] 开始调用 AI...');
         const result = await callDeepSeek([{ role: 'user', content: prompt }]);
-        const scenes = parseJSON(result);
+        console.log('[scriptExtractor] AI 返回结果:', result?.substring(0, 500));
+
+        let parsedData = parseJSON(result);
+
+        // 兼容 parseJSON 可能返回 { scenes: [...] } 结构的情况
+        let scenes: any[] = [];
+        if (Array.isArray(parsedData)) {
+            scenes = parsedData;
+        } else if (parsedData && Array.isArray(parsedData.scenes)) {
+            scenes = parsedData.scenes;
+        } else {
+            console.warn('[scriptExtractor] 无法从解析结果中提取场景数组:', parsedData);
+            scenes = [];
+        }
+
+        console.log('[scriptExtractor] 解析后的场景数量:', scenes.length);
+
+        if (scenes.length === 0) {
+            console.error('[scriptExtractor] 解析结果为空！原始返回:', result);
+            throw new Error('AI 返回的数据为空或格式错误');
+        }
+
+        // 🆕 验证数据完整性
+        const validation = validateScenes(scenes);
+        if (!validation.valid) {
+            console.warn('[scriptExtractor] 数据验证失败:', validation.errors);
+            console.log('[scriptExtractor] 尝试修复不完整的数据...');
+        }
+
+        // 🆕 修复不完整的数据
+        const fixedScenes = fixIncompleteScenes(scenes);
+        console.log('[scriptExtractor] 数据修复完成，场景数量:', fixedScenes.length);
 
         // 补全 ID 等前端需要的字段
-        return scenes.map((s: any, index: number) => ({
+        return fixedScenes.map((s: any, index: number) => ({
             id: generateId(),
             sceneNumber: s.sceneNumber || index + 1,
             episodeNumber: s.episodeNumber || 1,
@@ -125,21 +358,21 @@ ${originalText.substring(0, 15000)}
             specialSceneType: s.specialSceneType,
             dayNightNumber: s.dayNightNumber,
             characters: s.characters || [],
-            action: s.action || '',
+            action: cleanScriptText(s.action),
             beat: s.beat,
             dialogues: (s.dialogues || []).map((d: any) => ({
                 id: generateId(),
                 character: d.character,
                 extension: d.extension,
-                parenthetical: d.parenthetical,
-                lines: d.lines,
+                parenthetical: cleanScriptText(d.parenthetical),
+                lines: cleanScriptText(d.lines),
                 isFirstAppearance: d.isFirstAppearance || false,
                 isContinued: d.isContinued || false,
                 dual: d.dual
             })),
             transition: s.transition,
             estimatedDuration: s.estimatedDuration || 15,
-            notes: s.notes
+            notes: cleanScriptText(s.notes)
         }));
     } catch (error) {
         console.error('DeepSeek extractScript failed:', error);

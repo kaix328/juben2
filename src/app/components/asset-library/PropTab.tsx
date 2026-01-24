@@ -5,6 +5,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PromptEngine } from '../../utils/promptEngine';
+import { enhancePropDescription } from '../../utils/descriptionEnhancer';
+import { ClickableImage } from '../ImagePreviewDialog';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -105,6 +107,38 @@ export function PropTab({
             toast.success('已复制到剪切板');
         };
 
+        // 🆕 AI智能生成提示词（带描述增强）
+        const handleAIGenerate = () => {
+            // 1. 检查描述
+            if (!prop.description) {
+                toast.error('请先填写道具描述');
+                return;
+            }
+            
+            // 2. 检查导演风格（可选）
+            if (!project?.directorStyle) {
+                toast.warning('未设定导演风格，将使用默认风格生成');
+            }
+            
+            // 3. 🆕 智能增强描述
+            const enhancedDescription = enhancePropDescription(
+                prop.description || '',
+                prop.category
+            );
+            
+            // 创建增强后的道具对象
+            const enhancedProp = {
+                ...prop,
+                description: enhancedDescription,
+            };
+            
+            // 4. 生成提示词
+            const engine = new PromptEngine(project?.directorStyle);
+            const result = engine.forProp(enhancedProp);
+            handleUpdateProp(prop.id, { aiPrompt: result.positive });
+            toast.success('✨ 道具提示词已生成！已智能延展描述');
+        };
+
         const handleOptimize = () => {
             if (!project?.directorStyle) {
                 toast.error('未设定导演风格，无法优化');
@@ -203,11 +237,17 @@ export function PropTab({
                                 <Label className="text-xs text-center block">道具预览</Label>
                                 <div className="aspect-square bg-gray-50 rounded border border-dashed border-orange-300 overflow-hidden flex items-center justify-center relative group">
                                     {prop.preview ? (
-                                        <img src={prop.preview} className="w-full h-full object-cover" />
+                                        <ClickableImage
+                                            src={prop.preview}
+                                            alt={prop.name}
+                                            className="w-full h-full object-cover"
+                                            containerClassName="w-full h-full"
+                                            immediate
+                                        />
                                     ) : (
                                         <Package className="w-16 h-16 text-orange-200" />
                                     )}
-                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
                                         <Edit className="w-8 h-8 text-white" />
                                     </div>
                                 </div>
@@ -232,8 +272,19 @@ export function PropTab({
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
+                                                className="h-6 px-2 text-[10px] text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                                                onClick={() => handleAIGenerate()}
+                                                title="基于道具描述生成全新提示词"
+                                            >
+                                                <Sparkles className="w-3 h-3 mr-1" />
+                                                AI生成
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
                                                 className="h-6 px-2 text-[10px] text-orange-600 hover:text-orange-700 hover:bg-orange-50"
                                                 onClick={() => handleOptimize()}
+                                                title="优化现有提示词"
                                             >
                                                 <RotateCw className="w-3 h-3 mr-1" />
                                                 智能优化

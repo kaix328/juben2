@@ -1,6 +1,6 @@
 // 批量编辑面板组件 - 使用受控组件替代 DOM 操作
 import React, { memo, useState } from 'react';
-import { Edit3, Trash2, X } from 'lucide-react';
+import { Edit3, Trash2, X, Sparkles } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
@@ -10,16 +10,24 @@ import type { BatchUpdateValues } from '../types';
 
 interface BatchEditPanelProps {
     selectedCount: number;
+    totalCount?: number;
     onUpdate: (updates: BatchUpdateValues) => void;
     onDelete: () => void;
+    onBatchPolish: (instruction: string) => void; // 🆕 AI Batch Polish
     onClose: () => void;
+    onSelectAll?: () => void;
+    onClearSelection?: () => void;
 }
 
 export const BatchEditPanel = memo(function BatchEditPanel({
     selectedCount,
+    totalCount,
     onUpdate,
     onDelete,
-    onClose
+    onBatchPolish,
+    onClose,
+    onSelectAll,
+    onClearSelection
 }: BatchEditPanelProps) {
     // 使用受控组件状态
     const [batchEpisode, setBatchEpisode] = useState('');
@@ -38,9 +46,22 @@ export const BatchEditPanel = memo(function BatchEditPanel({
                 <CardTitle className="flex items-center gap-2 text-orange-700">
                     <Edit3 className="w-5 h-5" />
                     批量修改设置
-                    <span className="text-sm font-normal text-orange-600">
-                        （已选 {selectedCount} 个场景）
-                    </span>
+                    <div className="flex items-center gap-2 text-sm font-normal text-orange-600 ml-2">
+                        <span>（已选 {selectedCount} / {totalCount || '?'}）</span>
+                        {onSelectAll && (
+                            <Button variant="link" size="sm" onClick={onSelectAll} className="h-auto p-0 text-orange-600 hover:text-orange-800">
+                                全选
+                            </Button>
+                        )}
+                        {onClearSelection && selectedCount > 0 && (
+                            <>
+                                <span className="text-orange-300">|</span>
+                                <Button variant="link" size="sm" onClick={onClearSelection} className="h-auto p-0 text-orange-600 hover:text-orange-800">
+                                    取消
+                                </Button>
+                            </>
+                        )}
+                    </div>
                 </CardTitle>
                 <Button variant="ghost" size="sm" onClick={onClose}>
                     <X className="w-4 h-4" />
@@ -115,6 +136,27 @@ export const BatchEditPanel = memo(function BatchEditPanel({
                                 <SelectItem value="淡出">淡出</SelectItem>
                                 <SelectItem value="溶至">溶至</SelectItem>
                                 <SelectItem value="化至">化至</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+
+                {/* AI 批量润色 */}
+                <div className="pt-4 border-t border-orange-200">
+                    <div className="flex items-center gap-2 mb-2">
+                        <Sparkles className="w-4 h-4 text-purple-600" />
+                        <span className="text-sm font-medium text-purple-900">AI 批量优化</span>
+                    </div>
+                    <div className="flex bg-purple-50 p-2 rounded-lg gap-2">
+                        <Select onValueChange={(val) => onBatchPolish(val)}>
+                            <SelectTrigger className="bg-white border-purple-200">
+                                <SelectValue placeholder="选择优化指令..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="compact_action">精简动作描述 (更紧凑)</SelectItem>
+                                <SelectItem value="rich_action">丰富动作细节 (更有画面感)</SelectItem>
+                                <SelectItem value="formal_dialogue">规范对白格式</SelectItem>
+                                <SelectItem value="fix_typo">纠正错别字与标点</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>

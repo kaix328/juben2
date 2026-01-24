@@ -1,4 +1,9 @@
+/**
+ * 分镜编辑器快捷键 Hook
+ * 基于全局快捷键管理器实现，避免重复代码
+ */
 import { useEffect, useCallback } from 'react';
+import { keyboardManager, useKeyboardShortcuts as useGlobalShortcuts } from '../../../utils/keyboardShortcuts';
 
 interface KeyboardShortcutsConfig {
     onUndo?: () => void;
@@ -12,12 +17,13 @@ interface KeyboardShortcutsConfig {
 }
 
 /**
- * 键盘快捷键 Hook
+ * 分镜编辑器键盘快捷键 Hook
+ * 使用全局快捷键管理器，支持：
  * - Ctrl+Z: 撤销
  * - Ctrl+Y / Ctrl+Shift+Z: 重做
  * - Delete/Backspace: 删除选中
  * - Ctrl+A: 全选
- * - Escape: 取消选择
+ * - Escape: 取消选择/停止
  * - Ctrl+S: 保存
  * - Ctrl+C: 复制
  */
@@ -31,73 +37,49 @@ export function useKeyboardShortcuts({
     onCopy,
     enabled = true
 }: KeyboardShortcutsConfig) {
-
-    const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    
+    // 使用全局快捷键系统注册处理器
+    useEffect(() => {
         if (!enabled) return;
 
-        // 忽略输入框内的快捷键
-        const target = e.target as HTMLElement;
-        if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) {
-            // 但允许 Escape 在输入框中使用
-            if (e.key !== 'Escape') return;
+        const unregisters: (() => void)[] = [];
+
+        // 注册各个动作的处理器
+        if (onUndo) {
+            unregisters.push(keyboardManager.registerHandler('undo', onUndo));
+        }
+        if (onRedo) {
+            unregisters.push(keyboardManager.registerHandler('redo', onRedo));
+        }
+        if (onDelete) {
+            unregisters.push(keyboardManager.registerHandler('deletePanel', onDelete));
+        }
+        if (onSelectAll) {
+            unregisters.push(keyboardManager.registerHandler('selectAll', onSelectAll));
+        }
+        if (onEscape) {
+            unregisters.push(keyboardManager.registerHandler('stop', onEscape));
+        }
+        if (onSave) {
+            unregisters.push(keyboardManager.registerHandler('save', onSave));
+        }
+        if (onCopy) {
+            unregisters.push(keyboardManager.registerHandler('copy', onCopy));
         }
 
-        const isCtrl = e.ctrlKey || e.metaKey;
-        const isShift = e.shiftKey;
-
-        // Ctrl+Z: 撤销
-        if (isCtrl && e.key === 'z' && !isShift) {
-            e.preventDefault();
-            onUndo?.();
-            return;
-        }
-
-        // Ctrl+Y 或 Ctrl+Shift+Z: 重做
-        if ((isCtrl && e.key === 'y') || (isCtrl && isShift && e.key === 'z')) {
-            e.preventDefault();
-            onRedo?.();
-            return;
-        }
-
-        // Delete/Backspace: 删除
-        if (e.key === 'Delete' || e.key === 'Backspace') {
-            e.preventDefault();
-            onDelete?.();
-            return;
-        }
-
-        // Ctrl+A: 全选
-        if (isCtrl && e.key === 'a') {
-            e.preventDefault();
-            onSelectAll?.();
-            return;
-        }
-
-        // Escape: 取消选择
-        if (e.key === 'Escape') {
-            e.preventDefault();
-            onEscape?.();
-            return;
-        }
-
-        // Ctrl+S: 保存
-        if (isCtrl && e.key === 's') {
-            e.preventDefault();
-            onSave?.();
-            return;
-        }
-
-        // Ctrl+C: 复制（仅在有选中项时）
-        if (isCtrl && e.key === 'c') {
-            e.preventDefault();
-            onCopy?.();
-            return;
-        }
-
+        return () => {
+            unregisters.forEach(unregister => unregister());
+        };
     }, [enabled, onUndo, onRedo, onDelete, onSelectAll, onEscape, onSave, onCopy]);
-
-    useEffect(() => {
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [handleKeyDown]);
 }
+
+// 导出快捷键提示（从全局管理器获取）
+export const SHORTCUT_HINTS = [
+    { key: keyboardManager.formatKeys(['Ctrl', 'S']), action: '保存' },
+    { key: keyboardManager.formatKeys(['Ctrl', 'Z']), action: '撤销' },
+    { key: keyboardManager.formatKeys(['Ctrl', 'Shift', 'Z']), action: '重做' },
+    { key: keyboardManager.formatKeys(['Delete']), action: '删除选中' },
+    { key: keyboardManager.formatKeys(['Ctrl', 'A']), action: '全选' },
+    { key: keyboardManager.formatKeys(['Escape']), action: '取消选择' },
+    { key: keyboardManager.formatKeys(['Ctrl', 'C']), action: '复制' },
+];

@@ -302,6 +302,128 @@ export const DIRECTOR_STYLE_PRESETS: Record<string, DirectorStyle> = {
         aspectRatio: '16:9',
         videoFrameRate: '30',
         motionIntensity: 'dynamic'
+    },
+
+    // ========== 主题工厂风格 (Theme Factory) ==========
+    '深海幽蓝': {
+        artStyle: '写实主义',
+        colorTone: '深海蓝绿色调',
+        lightingStyle: '水下光线',
+        cameraStyle: '沉浸式镜头',
+        mood: '神秘宁静',
+        customPrompt: 'deep ocean aesthetic, navy blue #1a2332, teal accents #2d8b8b, seafoam highlights #a8dadc, underwater atmosphere, bioluminescence, serene and mysterious',
+        negativePrompt: '明亮阳光, 陆地场景, 暖色调',
+        aspectRatio: '16:9',
+        videoFrameRate: '24',
+        motionIntensity: 'subtle'
+    },
+    '午夜星河': {
+        artStyle: '梦幻奇幻',
+        colorTone: '宇宙紫色调',
+        lightingStyle: '星光闪烁',
+        cameraStyle: '史诗级镜头',
+        mood: '神秘浪漫',
+        customPrompt: 'cosmic galaxy aesthetic, deep purple #2b1e3e, cosmic blue #4a4e8f, lavender accents #a490c2, silver highlights #e6e6fa, starfield, nebula, mystical atmosphere',
+        negativePrompt: '日间场景, 暖色调, 简约风格',
+        aspectRatio: '21:9',
+        videoFrameRate: '24',
+        motionIntensity: 'normal'
+    },
+    '金色时光': {
+        artStyle: '复古温暖',
+        colorTone: '秋日暖金色调',
+        lightingStyle: '黄金时刻光',
+        cameraStyle: '怀旧镜头',
+        mood: '温馨怀旧',
+        customPrompt: 'golden hour aesthetic, mustard yellow #f4a900, terracotta #c1666b, warm beige #d4b896, chocolate brown #4a403a, autumn warmth, nostalgic, cozy atmosphere',
+        negativePrompt: '冷色调, 现代科技, 阴暗场景',
+        aspectRatio: '16:9',
+        videoFrameRate: '24',
+        motionIntensity: 'subtle'
+    },
+    '森林秘境': {
+        artStyle: '自然写实',
+        colorTone: '森林绿色调',
+        lightingStyle: '斑驳树影光',
+        cameraStyle: '自然纪录镜头',
+        mood: '宁静治愈',
+        customPrompt: 'forest canopy aesthetic, forest green #2d4a2b, sage #7d8471, olive #a4ac86, ivory #faf9f6, dappled sunlight, nature, organic, peaceful woodland',
+        negativePrompt: '城市场景, 人工照明, 鲜艳色彩',
+        aspectRatio: '16:9',
+        videoFrameRate: '24',
+        motionIntensity: 'subtle'
+    },
+    '樱花物语': {
+        artStyle: '日式唯美',
+        colorTone: '樱花粉色调',
+        lightingStyle: '柔和春光',
+        cameraStyle: '浪漫镜头',
+        mood: '浪漫唯美',
+        customPrompt: 'cherry blossom aesthetic, soft pink, sakura petals falling, spring atmosphere, Japanese garden, romantic, dreamy soft focus, pastel colors',
+        negativePrompt: '暗黑风格, 秋冬场景, 硬朗线条',
+        aspectRatio: '9:16',
+        videoFrameRate: '24',
+        motionIntensity: 'subtle'
+    },
+    '极光幻境': {
+        artStyle: '奇幻梦境',
+        colorTone: '极光渐变色调',
+        lightingStyle: '极光光效',
+        cameraStyle: '广角全景',
+        mood: '梦幻震撼',
+        customPrompt: 'aurora borealis aesthetic, northern lights, gradient colors from green to purple to pink, icy landscape, magical atmosphere, ethereal glow',
+        negativePrompt: '室内场景, 暖色调, 城市环境',
+        aspectRatio: '21:9',
+        videoFrameRate: '30',
+        motionIntensity: 'normal'
+    },
+    '蒸汽朋克': {
+        artStyle: '蒸汽朋克',
+        colorTone: '铜锈复古色调',
+        lightingStyle: '煤气灯光',
+        cameraStyle: '维多利亚镜头',
+        mood: '复古机械',
+        customPrompt: 'steampunk aesthetic, brass and copper tones, Victorian era, gears and clockwork, steam-powered machinery, industrial revolution, sepia tones',
+        negativePrompt: '现代科技, 简约风格, 明亮色彩',
+        aspectRatio: '16:9',
+        videoFrameRate: '24',
+        motionIntensity: 'normal'
+    },
+    '水彩梦境': {
+        artStyle: '水彩插画',
+        colorTone: '柔和水彩色调',
+        lightingStyle: '梦幻柔光',
+        cameraStyle: '艺术构图',
+        mood: '诗意梦幻',
+        customPrompt: 'watercolor painting aesthetic, soft edges, color bleeding, artistic brushstrokes, dreamy atmosphere, pastel palette, ethereal, hand-painted look',
+        negativePrompt: '写实风格, 硬边线条, 高对比度',
+        aspectRatio: '16:9',
+        videoFrameRate: '24',
+        motionIntensity: 'subtle'
+    },
+    '霓虹都市': {
+        artStyle: '都市夜景',
+        colorTone: '霓虹炫彩色调',
+        lightingStyle: '霓虹灯光',
+        cameraStyle: '街拍镜头',
+        mood: '潮流时尚',
+        customPrompt: 'neon city aesthetic, vibrant neon signs, rain-slicked streets, reflections, urban nightlife, pink and blue neon, modern metropolis, cinematic',
+        negativePrompt: '乡村场景, 自然光, 复古风格',
+        aspectRatio: '9:16',
+        videoFrameRate: '30',
+        motionIntensity: 'dynamic'
+    },
+    '复古胶片': {
+        artStyle: '胶片摄影',
+        colorTone: '复古胶片色调',
+        lightingStyle: '自然光',
+        cameraStyle: '35mm胶片镜头',
+        mood: '怀旧文艺',
+        customPrompt: 'vintage film aesthetic, film grain, light leaks, faded colors, 35mm photography, nostalgic, analog warmth, Kodak Portra tones',
+        negativePrompt: '数码清晰, 高饱和度, 现代感',
+        aspectRatio: '4:3',
+        videoFrameRate: '24',
+        motionIntensity: 'subtle'
     }
 };
 
@@ -315,3 +437,16 @@ export const DEFAULT_NEGATIVE_PROMPT =
     '手部畸形, 三只手, 手指过多, 手指粘连, ' +
     '低分辨率, 质量差, 最差质量, 压缩失真, 水印, ' +
     '文字, 签名, 用户名, 画面裁切, 画面外内容';
+
+/**
+ * 预设分类（用于UI展示）
+ */
+export const PRESET_CATEGORIES = {
+    '日系动画': ['宫崎骏风格', '新海诚风格', '今敏风格'],
+    '西方导演': ['诺兰风格', '昆汀风格', '王家卫风格', '韦斯·安德森风格', '吉尔莫·德尔·托罗风格'],
+    '视觉风格': ['赛博朋克', '黑色电影', '蒸汽朋克', '水彩梦境'],
+    'AI漫剧爆款': ['古风仙侠', '都市甜宠', '霸总虐恋', '重生逆袭', '玄幻修仙', '战神归来', '宫斗权谋', '末世求生', '校园青春', '国风唯美'],
+    '影视公司': ['皮克斯风格', '漫威风格'],
+    '地区风格': ['武侠风格', '宝莱坞风格'],
+    '主题工厂': ['深海幽蓝', '午夜星河', '金色时光', '森林秘境', '樱花物语', '极光幻境', '霓虹都市', '复古胶片'],
+};

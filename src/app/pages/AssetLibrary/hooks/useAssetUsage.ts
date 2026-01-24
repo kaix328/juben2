@@ -29,40 +29,36 @@ export function useAssetUsage({ projectId, assets, setAssets }: UseAssetUsageOpt
     const calculateUsage = useCallback(async () => {
         if (!projectId || !assets) return;
 
-        const chapters = await chapterStorage.getByProjectId(projectId);
+        try {
+            const chapters = await chapterStorage.getByProjectId(projectId);
 
-        const scripts = [];
-        for (const chapter of chapters) {
-            const script = await scriptStorage.getByChapterId(chapter.id);
-            if (script) {
-                scripts.push({ script, chapterTitle: chapter.title, chapterId: chapter.id });
+            const scripts = [];
+            for (const chapter of chapters) {
+                const script = await scriptStorage.getByChapterId(chapter.id);
+                if (script) {
+                    scripts.push({ script, chapterTitle: chapter.title, chapterId: chapter.id });
+                }
             }
-        }
 
-        const storyboards = [];
-        for (const chapter of chapters) {
-            const storyboard = await storyboardStorage.getByChapterId(chapter.id);
-            if (storyboard) {
-                storyboards.push({ storyboard, chapterTitle: chapter.title, chapterId: chapter.id });
+            const storyboards = [];
+            for (const chapter of chapters) {
+                const storyboard = await storyboardStorage.getByChapterId(chapter.id);
+                if (storyboard) {
+                    storyboards.push({ storyboard, chapterTitle: chapter.title, chapterId: chapter.id });
+                }
             }
-        }
 
-        const usage = calculateAssetUsage(assets, scripts, storyboards);
-        setUsageMap(usage);
-        setAllScripts(scripts);
-        setAllStoryboards(storyboards);
+            const usage = calculateAssetUsage(assets, scripts, storyboards);
+            setUsageMap(usage);
+            setAllScripts(scripts);
+            setAllStoryboards(storyboards);
 
-        // 更新资源的使用次数
-        const updatedAssets = {
-            ...assets,
-            characters: assets.characters.map(c => ({ ...c, usageCount: usage.get(c.id) || 0 })),
-            scenes: assets.scenes.map(s => ({ ...s, usageCount: usage.get(s.id) || 0 })),
-            props: assets.props.map(p => ({ ...p, usageCount: usage.get(p.id) || 0 })),
-            costumes: assets.costumes.map(c => ({ ...c, usageCount: usage.get(c.id) || 0 })),
-        };
-
-        if (JSON.stringify(updatedAssets) !== JSON.stringify(assets)) {
-            setAssets(updatedAssets);
+            // ⚠️ 移除这里的 setAssets(updatedAssets) 逻辑
+            // usageCount 在 UI 中通过 usageMap 实时计算显示，
+            // 避免在此处写回 assets 导致与 useAssetData 产生无限重绘循环
+        } catch (error) {
+            console.error('Failed to calculate asset usage:', error);
+            // 这里通常不需要 toast 报错，因为这是后台分析逻辑，但 console.error 必须有
         }
     }, [projectId, assets, setAssets]);
 

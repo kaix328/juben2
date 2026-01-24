@@ -7,35 +7,49 @@ import type {
     AssetLibrary,
     ProjectVersion,
     CharacterRelation,
-    StoryboardTemplate
+    StoryboardTemplate,
+    AssetRelation
 } from '../types';
 
 export class AppDatabase extends Dexie {
     projects!: Table<Project, string>;
     chapters!: Table<Chapter, string>;
-    scripts!: Table<Script, string>; // ID is string (guid)
+    scripts!: Table<Script, string>;
     storyboards!: Table<Storyboard, string>;
-    assets!: Table<AssetLibrary, string>; // Keyed by projectId usually, but let's see. logic in storage.ts uses find. 
-    // We'll index by id (string) and index projectId.
-
+    assets!: Table<AssetLibrary, string>;
     templates!: Table<StoryboardTemplate, string>;
     versions!: Table<ProjectVersion, string>;
     relations!: Table<CharacterRelation, string>;
+    assetRelations!: Table<AssetRelation, string>;
+    analyses!: Table<any, string>;
+    imageBlobs!: Table<{ id: string; ownerId: string; type: string; data: string; createdAt: string }, string>;
 
     constructor() {
         super('AiComicDB');
         this.version(1).stores({
             projects: 'id, title, updatedAt',
             chapters: 'id, projectId, orderIndex',
-            scripts: 'id, chapterId', // script.id is PK, chapterId is indexed
+            scripts: 'id, chapterId',
             storyboards: 'id, chapterId',
-            assets: 'projectId', // One asset library per project. We use projectId as PK? No, usually id. 
-            // But types says AssetLibrary has projectId but maybe not its own id? 
-            // Looking at types: interface AssetLibrary { projectId: string; ... } 
-            // It doesn't have an 'id'. So projectId is the PK.
+            assets: 'projectId',
             templates: 'id, category',
             versions: 'id, projectId, versionNumber',
-            relations: 'id, projectId, fromCharacterId, toCharacterId'
+            relations: 'id, projectId, fromCharacterId, toCharacterId',
+        });
+
+        // Version 2: Add assetRelations table
+        this.version(2).stores({
+            assetRelations: 'id, projectId, fromId, toId, relationType'
+        });
+
+        // Version 3: Add analyses table
+        this.version(3).stores({
+            analyses: 'id, projectId'
+        });
+
+        // Version 4: Add imageBlobs table for decoupled media storage
+        this.version(4).stores({
+            imageBlobs: 'id, ownerId, type'
         });
     }
 }

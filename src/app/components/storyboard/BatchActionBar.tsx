@@ -1,9 +1,10 @@
 import React from 'react';
-import { Check, Trash2, Settings2, Wand2, Plus, Layers, RefreshCw, Play, XCircle, RotateCcw } from 'lucide-react';
+import { Check, Trash2, Settings2, Wand2, Plus, Layers, Play, XCircle, RotateCcw, Palette } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { QUICK_PRESETS, SCENE_TEMPLATES } from '../../pages/StoryboardEditor/presets';
 import type { StoryboardPanel } from '../../types';
+import { getPresetsByCategory, CATEGORY_NAMES } from '../../utils/prompts/colorGrading';
 
 interface BatchActionBarProps {
     filteredPanelsCount: number;
@@ -16,7 +17,6 @@ interface BatchActionBarProps {
     handleGenerateAllImages: (ids: Set<string>, onProgress?: (c: number, t: number) => void, onComplete?: () => void) => void;
     handleAddPanel: () => void;
     handleApplyTemplate: (panels: Partial<StoryboardPanel>[]) => void;
-    handleRefreshAllPrompts: () => void;
     onPreview: () => void;
     isGeneratingAll: boolean;
     batchProgress: { current: number, total: number } | null;
@@ -37,7 +37,6 @@ export function BatchActionBar({
     handleGenerateAllImages,
     handleAddPanel,
     handleApplyTemplate,
-    handleRefreshAllPrompts,
     onPreview,
     isGeneratingAll,
     batchProgress,
@@ -113,16 +112,7 @@ export function BatchActionBar({
                         </SelectContent>
                     </Select>
 
-                    {/* 🆕 刷新全部提示词 */}
-                    <Button
-                        onClick={handleRefreshAllPrompts}
-                        variant="outline"
-                        size="sm"
-                        className="gap-2 bg-orange-50 border-orange-300 text-orange-700 hover:bg-orange-100"
-                    >
-                        <RefreshCw className="w-4 h-4" />
-                        刷新全部提示词
-                    </Button>
+
 
                     {/* 🆕 预览播放按钮 */}
                     <Button
@@ -176,6 +166,38 @@ export function BatchActionBar({
                                         <SelectItem key={preset.name} value={preset.name}>
                                             {preset.name}
                                         </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+
+                            {/* 🆕 批量应用调色 */}
+                            <Select
+                                onValueChange={(value) => {
+                                    handleBatchApplyParams({ colorGrade: value });
+                                }}
+                            >
+                                <SelectTrigger className="w-[150px] h-9 bg-amber-50 border-amber-300 text-amber-700">
+                                    <Palette className="w-4 h-4 mr-2" />
+                                    <SelectValue placeholder="批量调色" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {Object.entries(getPresetsByCategory()).map(([category, presets]) => (
+                                        <React.Fragment key={category}>
+                                            <div className="px-2 py-1 text-xs font-medium text-gray-500 bg-gray-50">
+                                                {CATEGORY_NAMES[category] || category}
+                                            </div>
+                                            {presets.map(preset => (
+                                                <SelectItem key={preset.id} value={preset.id}>
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="flex w-6 h-3 rounded overflow-hidden border border-gray-200">
+                                                            <div style={{ flex: 1, backgroundColor: preset.hex.primary }} />
+                                                            <div style={{ flex: 1, backgroundColor: preset.hex.secondary }} />
+                                                        </div>
+                                                        <span>{preset.name}</span>
+                                                    </div>
+                                                </SelectItem>
+                                            ))}
+                                        </React.Fragment>
                                     ))}
                                 </SelectContent>
                             </Select>

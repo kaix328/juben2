@@ -20,6 +20,8 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
+import { PromptTemplateSelector } from '../PromptTemplateSelector';
+import { PromptEditor } from './PromptEditor';
 import type { StoryboardPanel } from '../../types';
 import type { PanelStatus } from '../../pages/StoryboardEditor/types';
 import { QUICK_PRESETS } from '../../pages/StoryboardEditor/presets';
@@ -94,9 +96,19 @@ export interface ShotCardProps {
     onGeneratePrompts: () => void;
     onApplyPreset: (params: Partial<StoryboardPanel>) => void;
     onCopyPrompt: (prompt: string, type: 'image' | 'video') => void;
+    onOpenPromptPreview?: (panel: StoryboardPanel) => void;
     viewMode?: 'list' | 'grid';
     densityMode?: 'compact' | 'standard' | 'detailed';
 }
+
+// ShotCard 字段顺序说明（供完整性检查脚本使用）
+// 第1行：画面描述
+// 第2行：景别
+// 第3行：角色
+// 第4行：转场
+// 第5行：镜头焦距
+// 第6行：备注
+// 第7行：绘画提示词
 
 // 🆕 使用 React.memo 优化，避免不必要的重渲染
 export const ShotCard = memo(function ShotCardInner({
@@ -112,6 +124,7 @@ export const ShotCard = memo(function ShotCardInner({
     onGeneratePrompts,
     onApplyPreset,
     onCopyPrompt,
+    onOpenPromptPreview,
     viewMode = 'list',
     prevPanel,  // 🆕 上一个分镜（用于连贯性检查）
     nextPanel,  // 🆕 下一个分镜（用于连贯性检查）
@@ -236,6 +249,18 @@ export const ShotCard = memo(function ShotCardInner({
                     <Button variant="outline" size="sm" onClick={onGeneratePrompts} className="gap-1">
                         <Wand2 className="w-4 h-4" />刷新提示词
                     </Button>
+                    {onOpenPromptPreview && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onOpenPromptPreview(panel)}
+                            className="gap-1"
+                            title="预览提示词"
+                        >
+                            <Eye className="w-4 h-4" />
+                            预览提示词
+                        </Button>
+                    )}
                     <Button variant="outline" size="sm" onClick={onCopy} className="gap-1">
                         <Copy className="w-4 h-4" />复制分镜
                     </Button>
@@ -485,26 +510,26 @@ export const ShotCard = memo(function ShotCardInner({
                         </div>
                     </div>
 
-                    {/* 第7行：绘画提示词 + 视频提示词 */}
+                    {/* 第7行：绘画提示词 + 视频提示词 - 使用增强编辑器 */}
                     <div className="grid grid-cols-2 gap-4 pt-3 border-t border-dashed border-gray-200">
-                        <div>
-                            <div className="flex items-center justify-between mb-2">
-                                <Label className="text-sm font-medium text-indigo-600 flex items-center gap-1"><ImageIcon className="w-4 h-4" />绘画提示词 (Image Prompt)</Label>
-                                <Button size="sm" variant="outline" onClick={() => onCopyPrompt(panel.aiPrompt || '', 'image')} className="h-7 text-xs gap-1">
-                                    <Copy className="w-3 h-3" />复制提示词
-                                </Button>
-                            </div>
-                            <Textarea value={panel.aiPrompt || ''} onChange={(e) => onUpdate({ aiPrompt: e.target.value })} className="min-h-[100px] text-sm font-mono bg-indigo-50/50" placeholder="AI 绘图提示词..." />
-                        </div>
-                        <div>
-                            <div className="flex items-center justify-between mb-2">
-                                <Label className="text-sm font-medium text-purple-600 flex items-center gap-1"><Video className="w-4 h-4" />视频提示词 (Video Prompt)</Label>
-                                <Button size="sm" variant="outline" onClick={() => onCopyPrompt(panel.aiVideoPrompt || '', 'video')} className="h-7 text-xs gap-1">
-                                    <Copy className="w-3 h-3" />复制提示词
-                                </Button>
-                            </div>
-                            <Textarea value={panel.aiVideoPrompt || ''} onChange={(e) => onUpdate({ aiVideoPrompt: e.target.value })} className="min-h-[100px] text-sm font-mono bg-purple-50/50" placeholder="AI 视频提示词..." />
-                        </div>
+                        <PromptEditor
+                            value={panel.aiPrompt || ''}
+                            onChange={(val) => onUpdate({ aiPrompt: val })}
+                            type="image"
+                            templateType="scene"
+                            templateSubType={panel.shot === '特写' ? 'closeup' : panel.shot === '中景' ? 'medium' : 'wide'}
+                            showNegativePrompt={false}
+                            placeholder="AI 绘图提示词..."
+                        />
+                        <PromptEditor
+                            value={panel.aiVideoPrompt || ''}
+                            onChange={(val) => onUpdate({ aiVideoPrompt: val })}
+                            type="video"
+                            templateType="scene"
+                            templateSubType={panel.shot === '特写' ? 'closeup' : panel.shot === '中景' ? 'medium' : 'wide'}
+                            showNegativePrompt={false}
+                            placeholder="AI 视频提示词..."
+                        />
                     </div>
                 </div>
             </div>

@@ -16,6 +16,7 @@ export {
 
   // 剧本提取
   extractScript,
+  extractScriptInChunks,
   type ScriptMode,
 
   // 分镜后处理

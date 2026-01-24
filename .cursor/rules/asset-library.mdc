@@ -1,0 +1,180 @@
+# 项目库管理模块 Skills
+
+## 模块概述
+项目库管理模块负责管理项目中的所有资产：角色、场景、道具、服饰，支持AI提取和图像生成。
+
+## 核心文件
+- `src/app/pages/AssetLibrary/index.tsx` - 项目库主组件
+- `src/app/pages/AssetLibrary/hooks/useAssetData.ts` - 数据管理Hook
+- `src/app/pages/AssetLibrary/hooks/useImageGeneration.ts` - 图像生成Hook
+- `src/app/pages/AssetLibrary/hooks/useAssetUsage.ts` - 使用率追踪Hook
+- `src/app/components/asset-library/` - 各类型资产组件
+- `src/app/types/assets.ts` - 资产类型定义
+
+## 功能实现
+
+### 1. 资产类型
+
+#### 角色 (Character)
+```typescript
+interface Character {
+  id: string;
+  name: string;
+  description: string;
+  appearance: string;        // 外貌描述
+  personality: string;       // 性格特点
+  fullBodyPreview?: string;  // 全身图
+  facePreview?: string;      // 面部特写
+  tags: string[];
+  source?: string;           // 来源章节
+}
+```
+
+#### 场景 (Scene)
+```typescript
+interface SceneAsset {
+  id: string;
+  name: string;
+  description: string;
+  atmosphere: string;        // 氛围描述
+  widePreview?: string;      // 远景图
+  mediumPreview?: string;    // 中景图
+  closeupPreview?: string;   // 特写图
+  tags: string[];
+}
+```
+
+#### 道具 (Prop)
+```typescript
+interface Prop {
+  id: string;
+  name: string;
+  description: string;
+  preview?: string;          // 预览图
+  tags: string[];
+}
+```
+
+#### 服饰 (Costume)
+```typescript
+interface Costume {
+  id: string;
+  name: string;
+  description: string;
+  characterId?: string;      // 关联角色
+  preview?: string;          // 预览图
+  tags: string[];
+}
+```
+
+### 2. AI资产提取
+```typescript
+// 位置: hooks/useAssetData.ts
+// 功能：从剧本自动提取角色、场景、道具
+// 调用: handleAIExtract(options)
+// 选项：
+// - extractCharacters: boolean
+// - extractScenes: boolean
+// - extractProps: boolean
+// - extractCostumes: boolean
+```
+
+### 3. 图像生成
+```typescript
+// 位置: hooks/useImageGeneration.ts
+// 功能：
+handleGenerateCharacterFullBody(character)  // 生成角色全身图
+handleGenerateCharacterFace(character)      // 生成角色面部
+handleGenerateSceneWide(scene)              // 生成场景远景
+handleGenerateSceneMedium(scene)            // 生成场景中景
+handleGenerateSceneCloseup(scene)           // 生成场景特写
+handleGenerateProp(prop)                    // 生成道具图
+handleGenerateCostume(costume)              // 生成服饰图
+handleBatchGenerateAll()                    // 批量生成所有
+```
+
+### 4. 使用率追踪
+```typescript
+// 位置: hooks/useAssetUsage.ts
+// 功能：追踪资产在分镜中的使用情况
+// 返回：
+// - usageMap: Map<assetId, usageCount>
+// - getCharacterUsageLocations(id): 获取角色使用位置
+// - getSceneUsageLocations(id): 获取场景使用位置
+```
+
+### 5. 导演风格同步
+```typescript
+// 位置: hooks/useAssetData.ts
+// 功能：将导演风格应用到所有资产的AI提示词
+handleSyncDirectorStyle()
+```
+
+## 组件结构
+
+```
+AssetLibrary/
+├── index.tsx                    # 主组件
+├── components/
+│   ├── AssetLibraryHeader.tsx   # 头部工具栏
+│   ├── AssetStatsPanel.tsx      # 统计面板
+│   └── ExtractDialog.tsx        # 提取对话框
+└── hooks/
+    ├── useAssetData.ts          # 数据管理
+    ├── useImageGeneration.ts    # 图像生成
+    └── useAssetUsage.ts         # 使用率追踪
+
+components/asset-library/
+├── CharacterTab.tsx             # 角色标签页
+├── SceneTab.tsx                 # 场景标签页
+├── PropTab.tsx                  # 道具标签页
+└── CostumeTab.tsx               # 服饰标签页
+```
+
+## 标签页功能
+
+每个标签页支持：
+- 搜索过滤
+- 添加新资产
+- 编辑资产详情
+- 删除资产（显示使用率警告）
+- 生成AI图像
+- 标签管理
+- 拖拽排序
+- 分组显示（按标签/来源）
+
+## 导入导出
+
+```typescript
+// 导出项目库为JSON
+handleExport()
+
+// 从JSON导入项目库
+handleImport(file)
+```
+
+## 统计数据
+
+```typescript
+interface AssetStats {
+  characters: { total: number; withImages: number };
+  scenes: { total: number; withImages: number };
+  props: { total: number; withImages: number };
+  costumes: { total: number; withImages: number };
+  completionRate: number;  // 图像完成率 0-100
+}
+```
+
+## 开发规范
+
+1. **资产ID**: 使用 `generateId()` 生成
+2. **图像存储**: Base64 格式存储在 IndexedDB
+3. **标签管理**: 支持添加/删除标签
+4. **删除保护**: 删除前检查使用率并警告
+
+## 注意事项
+
+- 批量生成时显示进度条
+- 支持提示词优化开关
+- 资产卡片支持展开详情
+- 使用率高的资产删除需二次确认

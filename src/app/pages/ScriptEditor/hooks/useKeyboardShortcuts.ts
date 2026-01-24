@@ -1,5 +1,9 @@
-// 剧本编辑快捷键 Hook
-import { useEffect, useCallback } from 'react';
+/**
+ * 剧本编辑器快捷键 Hook
+ * 基于全局快捷键管理器实现，避免重复代码
+ */
+import { useEffect } from 'react';
+import { keyboardManager } from '../../../utils/keyboardShortcuts';
 
 interface UseKeyboardShortcutsOptions {
     onSave?: () => void;
@@ -11,6 +15,17 @@ interface UseKeyboardShortcutsOptions {
     enabled?: boolean;
 }
 
+/**
+ * 剧本编辑器键盘快捷键 Hook
+ * 使用全局快捷键管理器，支持：
+ * - Ctrl+S: 保存
+ * - Ctrl+Z: 撤销
+ * - Ctrl+Shift+Z: 重做
+ * - Ctrl+Enter: 添加场景
+ * - Ctrl+I: 统计面板
+ * - Ctrl+B: 批量模式
+ * - Esc: 取消选择
+ */
 export function useKeyboardShortcuts({
     onSave,
     onUndo,
@@ -20,95 +35,55 @@ export function useKeyboardShortcuts({
     onToggleBatchMode,
     enabled = true,
 }: UseKeyboardShortcutsOptions) {
-    const handleKeyDown = useCallback(
-        (event: KeyboardEvent) => {
-            if (!enabled) return;
-
-            // 忽略输入框中的快捷键（除了 Ctrl 组合键）
-            const target = event.target as HTMLElement;
-            const isInputField =
-                target.tagName === 'INPUT' ||
-                target.tagName === 'TEXTAREA' ||
-                target.isContentEditable;
-
-            // Ctrl/Cmd 组合键
-            const isCtrlOrCmd = event.ctrlKey || event.metaKey;
-
-            if (isCtrlOrCmd) {
-                switch (event.key.toLowerCase()) {
-                    case 's':
-                        // Ctrl+S: 保存
-                        event.preventDefault();
-                        onSave?.();
-                        break;
-
-                    case 'z':
-                        if (event.shiftKey) {
-                            // Ctrl+Shift+Z: 重做
-                            event.preventDefault();
-                            onRedo?.();
-                        } else {
-                            // Ctrl+Z: 撤销
-                            event.preventDefault();
-                            onUndo?.();
-                        }
-                        break;
-
-                    case 'y':
-                        // Ctrl+Y: 重做（Windows 风格）
-                        event.preventDefault();
-                        onRedo?.();
-                        break;
-
-                    case 'enter':
-                        // Ctrl+Enter: 添加新场景
-                        if (!isInputField) {
-                            event.preventDefault();
-                            onAddScene?.();
-                        }
-                        break;
-
-                    case 'i':
-                        // Ctrl+I: 切换统计面板
-                        if (!isInputField) {
-                            event.preventDefault();
-                            onToggleStats?.();
-                        }
-                        break;
-
-                    case 'b':
-                        // Ctrl+B: 切换批量模式
-                        if (!isInputField) {
-                            event.preventDefault();
-                            onToggleBatchMode?.();
-                        }
-                        break;
-                }
-            }
-
-            // Escape 键：取消批量模式
-            if (event.key === 'Escape' && !isInputField) {
-                onToggleBatchMode?.();
-            }
-        },
-        [enabled, onSave, onUndo, onRedo, onAddScene, onToggleStats, onToggleBatchMode]
-    );
-
+    
     useEffect(() => {
-        if (enabled) {
-            document.addEventListener('keydown', handleKeyDown);
-            return () => document.removeEventListener('keydown', handleKeyDown);
+        if (!enabled) return;
+
+        const unregisters: (() => void)[] = [];
+
+        // 注册各个动作的处理器
+        if (onSave) {
+            unregisters.push(keyboardManager.registerHandler('save', onSave));
         }
-    }, [enabled, handleKeyDown]);
+        if (onUndo) {
+            unregisters.push(keyboardManager.registerHandler('undo', onUndo));
+        }
+        if (onRedo) {
+            unregisters.push(keyboardManager.registerHandler('redo', onRedo));
+        }
+        if (onAddScene) {
+            unregisters.push(keyboardManager.registerHandler('newPanel', onAddScene));
+        }
+        if (onToggleStats) {
+            // 使用自定义处理器，因为全局没有这个动作
+            const handleToggleStats = (e: KeyboardEvent) => {
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i') {
+                    e.preventDefault();
+                    onToggleStats();
+                }
+            };
+            window.addEventListener('keydown', handleToggleStats);
+            unregisters.push(() => window.removeEventListener('keydown', handleToggleStats));
+        }
+        if (onToggleBatchMode) {
+            unregisters.push(keyboardManager.registerHandler('toggleSidebar', onToggleBatchMode));
+            // 也监听 Escape 退出批量模式
+            unregisters.push(keyboardManager.registerHandler('stop', onToggleBatchMode));
+        }
+
+        return () => {
+            unregisters.forEach(unregister => unregister());
+        };
+    }, [enabled, onSave, onUndo, onRedo, onAddScene, onToggleStats, onToggleBatchMode]);
 }
 
-// 快捷键提示组件
+// 快捷键提示组件（从全局管理器获取格式化的快捷键）
 export const SHORTCUT_HINTS = [
-    { key: 'Ctrl+S', action: '保存' },
-    { key: 'Ctrl+Z', action: '撤销' },
-    { key: 'Ctrl+Shift+Z', action: '重做' },
-    { key: 'Ctrl+Enter', action: '添加场景' },
-    { key: 'Ctrl+I', action: '统计面板' },
-    { key: 'Ctrl+B', action: '批量模式' },
-    { key: 'Esc', action: '取消选择' },
+    { key: keyboardManager.formatKeys(['Ctrl', 'S']), action: '保存' },
+    { key: keyboardManager.formatKeys(['Ctrl', 'Z']), action: '撤销' },
+    { key: keyboardManager.formatKeys(['Ctrl', 'Shift', 'Z']), action: '重做' },
+    { key: keyboardManager.formatKeys(['Ctrl', 'N']), action: '添加场景' },
+    { key: keyboardManager.formatKeys(['Ctrl', 'I']), action: '统计面板' },
+    { key: keyboardManager.formatKeys(['Ctrl', 'B']), action: '批量模式' },
+    { key: keyboardManager.formatKeys(['Escape']), action: '取消选择' },
 ];

@@ -21,6 +21,16 @@ export interface Character {
     createdAt?: string; // 创建时间
     usageCount?: number; // 使用次数（在分镜中的引用）
 
+    // 🆕 视觉细节
+    gender?: string;
+    age?: string;
+    height?: string;
+    bodyType?: string;
+    hairStyle?: string;
+    hairColor?: string;
+    clothing?: string;
+    accessories?: string;
+
     // 🆕 角色一致性相关字段
     triggerWord?: string; // 角色触发词（如：char_zhangsan_001）
     standardAppearance?: string; // 标准化外貌描述（结构化格式）
@@ -30,6 +40,7 @@ export interface Character {
     loraModel?: string; // LoRA 模型名称
     loraWeight?: number; // LoRA 权重 (0-1)
     ipAdapterWeight?: number; // IP-Adapter 权重 (0-1)
+    aliases?: string[]; // 别名
 }
 
 // 场景
@@ -59,6 +70,7 @@ export interface Scene {
     weather?: string; // 天气
     createdAt?: string; // 创建时间
     usageCount?: number; // 使用次数
+    aliases?: string[]; // 别名
 }
 
 // 道具
@@ -74,6 +86,7 @@ export interface Prop {
     tags?: string[]; // 标签
     createdAt?: string; // 创建时间
     usageCount?: number; // 使用次数
+    aliases?: string[]; // 别名
 }
 
 // 服饰
@@ -90,6 +103,7 @@ export interface Costume {
     tags?: string[]; // 标签
     createdAt?: string; // 创建时间
     usageCount?: number; // 使用次数
+    aliases?: string[]; // 别名
 }
 
 // 项目资源库类型

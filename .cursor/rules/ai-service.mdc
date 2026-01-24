@@ -1,0 +1,213 @@
+# AI服务模块 Skills
+
+## 模块概述
+AI服务模块封装了所有与AI相关的功能，包括剧本提取、分镜生成、图像生成、资产提取等。
+
+## 核心文件
+- `src/app/utils/aiService.ts` - AI服务入口（重导出）
+- `src/app/utils/ai/` - AI功能模块目录
+- `src/app/utils/prompts/` - 提示词生成模块
+- `src/app/store/useConfigStore.ts` - API配置存储
+
+## 模块结构
+
+```
+utils/ai/
+├── index.ts              # 统一导出
+├── scriptExtractor.ts    # 剧本提取
+├── storyboardExtractor.ts # 分镜生成
+├── imageGenerator.ts     # 图像生成
+├── assetExtractor.ts     # 资产提取
+├── storyAnalyzer.ts      # 故事分析
+└── utils.ts              # 工具函数
+
+utils/prompts/
+├── index.ts              # 统一导出
+├── audio-presets.ts      # 音效预设
+├── camera-presets.ts     # 运镜预设
+├── director-style-presets.ts # 导演风格预设
+└── generators.ts         # 提示词生成器
+```
+
+## 功能实现
+
+### 1. 剧本提取
+```typescript
+// 位置: utils/ai/scriptExtractor.ts
+// 功能：从原文提取专业剧本格式
+export async function extractScript(
+  originalText: string,
+  mode: ScriptMode = 'full'
+): Promise<Script>
+
+// 模式：
+// - 'full': 完整提取
+// - 'scenes': 仅场景
+// - 'dialogues': 仅对白
+```
+
+### 2. 分镜生成
+```typescript
+// 位置: utils/ai/storyboardExtractor.ts
+// 功能：从剧本生成分镜面板
+export async function extractStoryboard(
+  script: Script,
+  densityMode: 'sparse' | 'normal' | 'dense',
+  episodeNumber?: number
+): Promise<StoryboardPanel[]>
+
+// 后处理：智能填充面板信息
+export async function smartFillPanel(
+  panel: StoryboardPanel,
+  context: { script: Script; assets: AssetLibrary }
+): Promise<StoryboardPanel>
+```
+
+### 3. 图像生成
+```typescript
+// 位置: utils/ai/imageGenerator.ts
+// 功能：调用火山引擎生成图像
+export async function generateStoryboardImage(
+  prompt: string,
+  negativePrompt?: string,
+  options?: ImageGenerationOptions
+): Promise<string>  // 返回Base64图像
+
+interface ImageGenerationOptions {
+  width?: number;
+  height?: number;
+  style?: string;
+  seed?: number;
+}
+```
+
+### 4. 资产提取
+```typescript
+// 位置: utils/ai/assetExtractor.ts
+// 功能：从剧本提取角色、场景、道具
+export async function extractAssets(
+  script: Script,
+  options: ExtractOptions
+): Promise<ExtractedAssets>
+
+interface ExtractedAssets {
+  characters: Character[];
+  scenes: SceneAsset[];
+  props: Prop[];
+  costumes: Costume[];
+}
+```
+
+### 5. 故事分析
+```typescript
+// 位置: utils/ai/storyAnalyzer.ts
+// 功能：五元素故事分析
+export async function analyzeStoryFiveElements(
+  content: string,
+  onProgress?: (progress: AnalysisProgress) => void
+): Promise<StoryFiveElements>
+
+interface StoryFiveElements {
+  theme: ThemeAnalysis;
+  characters: CharacterBio[];
+  relationships: CharacterRelationship[];
+  plotPoints: PlotPoint[];
+  worldBuilding: WorldBuilding;
+}
+```
+
+## API配置
+
+```typescript
+// 位置: store/useConfigStore.ts
+interface ApiSettings {
+  volcApiKey: string;       // 火山引擎API Key
+  llmEndpointId: string;    // LLM端点ID (DeepSeek)
+  imageEndpointId: string;  // 图像端点ID (Doubao)
+}
+
+// 使用方式
+const { apiSettings } = useConfigStore();
+```
+
+## 提示词生成
+
+### 导演风格预设
+```typescript
+// 位置: utils/prompts/director-style-presets.ts
+export const DIRECTOR_STYLE_PRESETS: Record<string, DirectorStyle> = {
+  '宫崎骏': { artStyle: '手绘动画', colorTone: '温暖明亮', ... },
+  '新海诚': { artStyle: '精细动画', colorTone: '梦幻唯美', ... },
+  '诺兰': { artStyle: '写实电影', colorTone: '冷峻深沉', ... },
+  // ...更多预设
+};
+
+export const PRESET_CATEGORIES = {
+  '动画大师': ['宫崎骏', '新海诚', '今敏', ...],
+  '电影导演': ['诺兰', '王家卫', '韦斯安德森', ...],
+  '主题工厂': ['赛博朋克', '蒸汽朋克', '奇幻史诗', ...],
+};
+```
+
+### 运镜预设
+```typescript
+// 位置: utils/prompts/camera-presets.ts
+export const SHOT_SIZE_PROMPTS: Record<ShotSize, string>;
+export const CAMERA_MOVEMENT_PROMPTS: Record<CameraMovementType, string>;
+export const CAMERA_ANGLE_PROMPTS: Record<CameraAngleType, string>;
+```
+
+## 工具函数
+
+```typescript
+// 位置: utils/ai/utils.ts
+
+// 开发日志
+export function devLog(message: string, data?: any): void;
+
+// 带重试的API调用
+export async function callWithRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  delay: number = 1000
+): Promise<T>;
+
+// 角色一致性检查
+export function checkCharacterConsistency(
+  prompt: string,
+  characters: Character[]
+): string;
+```
+
+## 错误处理
+
+```typescript
+// AI服务错误类型
+class AIServiceError extends Error {
+  code: 'API_ERROR' | 'TIMEOUT' | 'RATE_LIMIT' | 'INVALID_RESPONSE';
+  retryable: boolean;
+}
+
+// 使用示例
+try {
+  const result = await extractScript(text);
+} catch (error) {
+  if (error instanceof AIServiceError && error.retryable) {
+    // 可重试
+  }
+}
+```
+
+## 开发规范
+
+1. **API调用**: 统一使用 `callWithRetry` 包装
+2. **日志输出**: 使用 `devLog` 仅在开发环境输出
+3. **提示词**: 英文效果更佳，中文作为备选
+4. **超时设置**: 默认30秒，图像生成60秒
+
+## 注意事项
+
+- API Key 存储在 localStorage（加密）
+- 支持环境变量配置默认值
+- 图像生成支持队列管理
+- 所有AI调用支持取消操作

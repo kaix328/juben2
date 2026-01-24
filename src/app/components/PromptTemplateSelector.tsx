@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Wand2, ChevronDown } from 'lucide-react';
 import { Button } from './ui/button';
-import { PROMPT_TEMPLATES } from '../utils/promptOptimizer';
+import { getAvailableTemplates } from '../utils/promptTemplates';
 
 interface PromptTemplateSelectorProps {
   type: 'character' | 'scene' | 'prop' | 'costume';
@@ -18,26 +18,36 @@ export function PromptTemplateSelector({
 }: PromptTemplateSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
 
+  // 获取所有可用模板
+  const allTemplates = getAvailableTemplates();
+  
+  // 根据类型筛选合适的模板
   const getTemplates = () => {
-    if (type === 'character' && subType) {
-      return PROMPT_TEMPLATES.character[subType as 'fullBody' | 'face'];
+    if (type === 'character') {
+      // 角色相关模板
+      return allTemplates.filter(t => 
+        ['standard', 'characterFocus', 'dialogue', 'emotional'].includes(t.name)
+      );
     }
-    if (type === 'scene' && subType) {
-      return PROMPT_TEMPLATES.scene[subType as 'wide' | 'medium' | 'closeup'];
+    if (type === 'scene') {
+      // 场景相关模板
+      return allTemplates.filter(t => 
+        ['standard', 'establishing', 'emotional', 'technical'].includes(t.name)
+      );
     }
-    if (type === 'prop') {
-      return PROMPT_TEMPLATES.prop;
+    if (type === 'prop' || type === 'costume') {
+      // 道具/服饰相关模板
+      return allTemplates.filter(t => 
+        ['standard', 'technical'].includes(t.name)
+      );
     }
-    if (type === 'costume') {
-      return PROMPT_TEMPLATES.costume;
-    }
-    return [];
+    return allTemplates;
   };
 
   const templates = getTemplates();
 
-  const handleSelect = (template: string) => {
-    onSelect(template);
+  const handleSelect = (templateName: string) => {
+    onSelect(templateName);
     setIsOpen(false);
   };
 
@@ -69,15 +79,21 @@ export function PromptTemplateSelector({
               <div className="text-xs text-gray-500 px-2 py-1 font-medium">
                 选择提示词模板
               </div>
-              {templates.map((template, index) => (
+              {templates.map((template) => (
                 <button
-                  key={index}
-                  onClick={() => handleSelect(template)}
-                  className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm text-gray-700 transition-colors"
+                  key={template.name}
+                  onClick={() => handleSelect(template.name)}
+                  className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm transition-colors"
                 >
-                  {template}
+                  <div className="font-medium text-gray-900">{template.name}</div>
+                  <div className="text-xs text-gray-500 mt-0.5">{template.description}</div>
                 </button>
               ))}
+              {templates.length === 0 && (
+                <div className="px-3 py-2 text-sm text-gray-500">
+                  暂无可用模板
+                </div>
+              )}
             </div>
           </div>
         </>

@@ -11,6 +11,9 @@ import { styleSettingsStorage } from '../../../utils/localStorage';
 import { extractAssets } from '../../../utils/aiService';
 import { canSafelyDeleteAsset } from '../../../utils/assetTracker';
 import { PromptEngine } from '../../../utils/promptEngine';
+import { calculateSimilarity } from '../../../utils/stringSimilarity';
+import { storyboardStorage } from '../../../utils/storage';
+import { errorHandler } from '../../../services/errorHandler';
 import type {
     AssetLibrary,
     Project,
@@ -27,51 +30,14 @@ interface UseAssetDataOptions {
     projectId: string | undefined;
 }
 
-/**
- * 资产增量合并逻辑
- */
-const mergeAssets = (oldAssets: AssetLibrary, newAssets: AssetLibrary): AssetLibrary => {
-    const merge = (oldList: any[], newList: any[], imageKeys: string[]) => {
-        const oldMap = new Map(oldList.map(item => [item.name.trim().toLowerCase(), item]));
-        const merged = [...oldList];
 
-        newList.forEach(newItem => {
-            const nameKey = newItem.name.trim().toLowerCase();
-            const existingItem = oldMap.get(nameKey);
-
-            if (existingItem) {
-                const idx = merged.findIndex(m => m.id === existingItem.id);
-                if (idx !== -1) {
-                    const updatedItem = { ...newItem, ...existingItem };
-                    const textFields = ['description', 'appearance', 'personality', 'environment', 'location', 'category', 'aiPrompt', 'fullBodyPrompt', 'facePrompt', 'widePrompt', 'mediumPrompt', 'closeupPrompt'];
-                    textFields.forEach(field => {
-                        if (newItem[field]) {
-                            updatedItem[field] = newItem[field];
-                        }
-                    });
-                    merged[idx] = updatedItem;
-                }
-            } else {
-                merged.push(newItem);
-            }
-        });
-        return merged;
-    };
-
-    return {
-        projectId: oldAssets.projectId,
-        characters: merge(oldAssets.characters, newAssets.characters, ['avatar', 'fullBodyPreview', 'facePreview']),
-        scenes: merge(oldAssets.scenes, newAssets.scenes, ['image', 'widePreview', 'mediumPreview', 'closeupPreview']),
-        props: merge(oldAssets.props, newAssets.props, ['image', 'preview']),
-        costumes: merge(oldAssets.costumes, newAssets.costumes, ['image', 'preview']),
-    };
-};
 
 export function useAssetData({ projectId }: UseAssetDataOptions) {
     const [project, setProject] = useState<Project | null>(null);
     const [assets, setAssets] = useState<AssetLibrary | null>(null);
     const [isExtracting, setIsExtracting] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
+    const [pendingAssets, setPendingAssets] = useState<any[] | null>(null);
     const [styleSettings, setStyleSettings] = useState<StyleApplicationSettings>({
         mode: 'manual',
         autoApplyToNew: true,
@@ -83,20 +49,29 @@ export function useAssetData({ projectId }: UseAssetDataOptions) {
     // 加载数据
     const loadAssets = useCallback(async () => {
         if (!projectId) return;
-        const assetsData = await assetStorage.getByProjectId(projectId);
-        setAssets(assetsData || {
-            projectId: projectId,
-            characters: [],
-            scenes: [],
-            props: [],
-            costumes: [],
-        });
+        try {
+            const assetsData = await assetStorage.getByProjectId(projectId);
+            setAssets(assetsData || {
+                projectId: projectId,
+                characters: [],
+                scenes: [],
+                props: [],
+                costumes: [],
+            });
+        } catch (error) {
+            console.error('Failed to load assets:', error);
+            toast.error('资源库加载失败，请刷新页面');
+        }
     }, [projectId]);
 
     const loadProject = useCallback(async () => {
         if (!projectId) return;
-        const proj = await projectStorage.getById(projectId);
-        setProject(proj || null);
+        try {
+            const proj = await projectStorage.getById(projectId);
+            setProject(proj || null);
+        } catch (error) {
+            console.error('Failed to load project:', error);
+        }
     }, [projectId]);
 
     useEffect(() => {
@@ -115,12 +90,17 @@ export function useAssetData({ projectId }: UseAssetDataOptions) {
     // 保存
     const handleSave = useCallback(async () => {
         if (!assets) return;
-        await assetStorage.save(assets);
-        toast.success('项目库已保存');
+        try {
+            await assetStorage.save(assets);
+            toast.success('项目库已保存');
+        } catch (error) {
+            console.error('Failed to save assets:', error);
+            toast.error('保存失败，请检查存储空间');
+        }
     }, [assets]);
 
     // AI 提取
-    const handleAIExtract = useCallback(async (isMerge: boolean = false) => {
+    const handleAIExtract = useCallback(async () => {
         if (!projectId) return;
 
         const chapters = await chapterStorage.getByProjectId(projectId);
@@ -147,19 +127,17 @@ export function useAssetData({ projectId }: UseAssetDataOptions) {
         setIsExtracting(true);
         try {
             const extracted = await extractAssets(allOriginalText, allScenes, project?.directorStyle);
-            const rawNewAssets: AssetLibrary = {
-                projectId: projectId,
-                ...extracted,
-            };
 
-            let finalAssets = rawNewAssets;
-            if (isMerge && assets) {
-                finalAssets = mergeAssets(assets, rawNewAssets);
-            }
+            // 🆕 不再直接保存，而是转换格式并存入暂存区
+            const flattenedExtracted = [
+                ...extracted.characters.map(c => ({ ...c, type: 'character' })),
+                ...extracted.scenes.map(s => ({ ...s, type: 'scene' })),
+                ...extracted.props.map(p => ({ ...p, type: 'prop' })),
+                ...extracted.costumes.map(c => ({ ...c, type: 'costume' })),
+            ];
 
-            await assetStorage.save(finalAssets);
-            setAssets(finalAssets);
-            toast.success(isMerge ? '增量分析完成！' : '全量覆盖提取完成！');
+            setPendingAssets(flattenedExtracted);
+            toast.info(`提取完成，发现 ${flattenedExtracted.length} 项资产待审核`);
         } catch (error) {
             console.error('AI extract failed:', error);
             toast.error('提取失败，请重试');
@@ -167,6 +145,168 @@ export function useAssetData({ projectId }: UseAssetDataOptions) {
             setIsExtracting(false);
         }
     }, [projectId, project, assets]);
+
+    /**
+     * 🆕 处理暂存审核后的最终确认入库
+     */
+    const handleConfirmStaging = useCallback(async (stagedAssets: any[]) => {
+        if (!assets || !projectId) return;
+
+        try {
+            const updatedAssets = { ...assets };
+
+            stagedAssets.forEach(staged => {
+                if (staged.action === 'ignore') return;
+
+                const categoryKey = staged.type === 'character' ? 'characters' :
+                    staged.type === 'scene' ? 'scenes' :
+                        staged.type === 'prop' ? 'props' : 'costumes';
+
+                const list = [...(updatedAssets[categoryKey] as any[])];
+
+                if (staged.action === 'add') {
+                    const newAsset = {
+                        ...staged,
+                        aliases: [],
+                        action: undefined,
+                        mergeWithId: undefined,
+                        similarityScore: undefined,
+                        matchReason: undefined
+                    };
+                    
+                    // 🆕 如果是角色且没有触发词，自动生成
+                    if (staged.type === 'character' && !newAsset.triggerWord) {
+                        newAsset.triggerWord = PromptEngine.generateTriggerWord(newAsset.name, newAsset.id);
+                    }
+                    
+                    list.push(newAsset);
+                } else if (staged.action === 'merge' && staged.mergeWithId) {
+                    const idx = list.findIndex(item => item.id === staged.mergeWithId);
+                    if (idx !== -1) {
+                        const existing = list[idx];
+                        const merged = { ...existing };
+
+                        // 记录别名
+                        const currentAliases = existing.aliases || [];
+                        if (staged.name !== existing.name && !currentAliases.includes(staged.name)) {
+                            merged.aliases = [...currentAliases, staged.name];
+                        }
+
+                        // 决定哪些字段要更新
+                        const fieldsToUpdate = ['description', 'appearance', 'personality', 'environment', 'location', 'category', 'aiPrompt'];
+                        fieldsToUpdate.forEach(field => {
+                            if (staged[field]) merged[field] = staged[field];
+                        });
+
+                        list[idx] = merged;
+                    }
+                }
+
+                (updatedAssets as any)[categoryKey] = list;
+            });
+
+            await assetStorage.save(updatedAssets);
+            setAssets(updatedAssets);
+            setPendingAssets(null);
+            toast.success('资产库已根据审核结果更新');
+        } catch (error) {
+            console.error('Confirm staging failed:', error);
+            toast.error('保存入库失败，请重试');
+        }
+    }, [assets, projectId]);
+
+    // 🆕 资产库全量一键合并
+    const handleMergeAssets = useCallback(async (category: keyof AssetLibrary, masterId: string, duplicateId: string) => {
+        if (!assets || !projectId) return;
+
+        const updatedAssets = JSON.parse(JSON.stringify(assets)) as AssetLibrary;
+        const list = updatedAssets[category] as any[];
+        const master = list.find(a => a.id === masterId);
+        const duplicate = list.find(a => a.id === duplicateId);
+
+        if (!master || !duplicate) {
+            toast.error('找不到要合并的资产');
+            return;
+        }
+
+        console.log(`[AssetData] 合并资产: ${duplicate.name} -> ${master.name}`);
+
+        // 1. 合并属性
+        const fields = ['description', 'appearance', 'personality', 'environment', 'location', 'category', 'aiPrompt'];
+        fields.forEach(f => {
+            if (!master[f] && duplicate[f]) master[f] = duplicate[f];
+        });
+
+        // 2. 合并别名
+        const currentAliases = master.aliases || [];
+        if (duplicate.name !== master.name && !currentAliases.includes(duplicate.name)) {
+            currentAliases.push(duplicate.name);
+        }
+        if (duplicate.aliases) {
+            duplicate.aliases.forEach((a: string) => {
+                if (a !== master.name && !currentAliases.includes(a)) {
+                    currentAliases.push(a);
+                }
+            });
+        }
+        master.aliases = currentAliases;
+
+        // 3. 从列表中移除重复项
+        updatedAssets[category] = list.filter(a => a.id !== duplicateId) as any;
+
+        try {
+            // 4. 保存资产
+            await assetStorage.save(updatedAssets);
+            setAssets(updatedAssets);
+
+            // 5. 修复分镜引用
+            if (duplicate.name && master.name && duplicate.name !== master.name) {
+                const renameMap = { [duplicate.name]: master.name };
+                await fixStoryboardReferences(projectId, renameMap);
+            }
+
+            toast.success(`合并成功：${duplicate.name} 已并入 ${master.name}`);
+        } catch (error) {
+            console.error('[AssetData] 合并失败:', error);
+            toast.error('合并操作失败');
+        }
+    }, [assets, projectId, setAssets]);
+
+    const handleBatchDeduplicate = useCallback(async () => {
+        console.log('[useAssetData] handleBatchDeduplicate called', { hasAssets: !!assets, projectId });
+
+        if (!assets || !projectId) {
+            console.warn('[useAssetData] handleBatchDeduplicate cancelled: missing assets or projectId');
+            toast.error('资料库尚未加载完成，请稍后按 F5 刷新重试');
+            return;
+        }
+
+        try {
+            setIsSyncing(true);
+            console.log('[useAssetData] Invoking performBatchDeduplicate...');
+            const { updatedAssets, fixCount } = await performBatchDeduplicate(assets, projectId, (msg) => {
+                console.log('[useAssetData] Progress:', msg);
+                toast.info(msg);
+            });
+
+            console.log('[useAssetData] performBatchDeduplicate completed, fixCount:', fixCount);
+
+            if (fixCount === 0) {
+                toast.success('未发现需要合并的重复资产');
+            } else {
+                console.log('[useAssetData] Saving updated assets...');
+                await assetStorage.save(updatedAssets);
+                setAssets(updatedAssets);
+                toast.success(`一键整合完成！共合并了 ${fixCount} 组重复资产，并同步修复了分镜引用。`);
+            }
+        } catch (error) {
+            console.error('[useAssetData] Batch deduplicate failed CRITICAL:', error);
+            errorHandler.handle(error as Error, { context: { component: 'useAssetData', action: 'handleBatchDeduplicate' } });
+            toast.error('资料整合过程中发生严重错误，请检查控制台');
+        } finally {
+            setIsSyncing(false);
+        }
+    }, [assets, projectId]);
 
     // 同步导演风格
     const handleSyncDirectorStyle = useCallback(async () => {
@@ -228,14 +368,39 @@ export function useAssetData({ projectId }: UseAssetDataOptions) {
             if (!prev) return prev;
             return {
                 ...prev,
-                characters: prev.characters.map(c => c.id === id ? { ...c, ...updates } : c)
+                characters: prev.characters.map(c => {
+                    if (c.id === id) {
+                        const updatedChar = { ...c, ...updates };
+                        // 🆕 如果名称改变且没有手动设置触发词，自动更新触发词
+                        if (updates.name && updates.name !== c.name && !updates.triggerWord) {
+                            updatedChar.triggerWord = PromptEngine.generateTriggerWord(updates.name, c.id);
+                        }
+                        // 🆕 如果角色没有触发词，自动生成
+                        if (!updatedChar.triggerWord) {
+                            updatedChar.triggerWord = PromptEngine.generateTriggerWord(updatedChar.name, c.id);
+                        }
+                        return updatedChar;
+                    }
+                    return c;
+                })
+            };
+        });
+    }, []);
+
+    const handleBatchUpdateCharacter = useCallback((updates: Record<string, Partial<Character>>) => {
+        setAssets(prev => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                characters: prev.characters.map(c => updates[c.id] ? { ...c, ...updates[c.id] } : c)
             };
         });
     }, []);
 
     const handleAddCharacter = useCallback(() => {
+        const newId = generateId();
         const newCharacter: Character = {
-            id: generateId(),
+            id: newId,
             name: '新角色',
             description: '',
             appearance: '',
@@ -250,6 +415,9 @@ export function useAssetData({ projectId }: UseAssetDataOptions) {
             tags: [],
             createdAt: new Date().toISOString(),
             usageCount: 0,
+            aliases: [],
+            // 🆕 自动生成触发词
+            triggerWord: PromptEngine.generateTriggerWord('新角色', newId),
         };
         setAssets(prev => prev ? { ...prev, characters: [...prev.characters, newCharacter] } : prev);
     }, []);
@@ -284,6 +452,7 @@ export function useAssetData({ projectId }: UseAssetDataOptions) {
             tags: [],
             createdAt: new Date().toISOString(),
             usageCount: 0,
+            aliases: [],
         };
         setAssets(prev => prev ? { ...prev, scenes: [...prev.scenes, newScene] } : prev);
     }, []);
@@ -311,6 +480,7 @@ export function useAssetData({ projectId }: UseAssetDataOptions) {
             tags: [],
             createdAt: new Date().toISOString(),
             usageCount: 0,
+            aliases: [],
         };
         setAssets(prev => prev ? { ...prev, props: [...prev.props, newProp] } : prev);
     }, []);
@@ -343,6 +513,7 @@ export function useAssetData({ projectId }: UseAssetDataOptions) {
             tags: [],
             createdAt: new Date().toISOString(),
             usageCount: 0,
+            aliases: [],
         };
         setAssets(prev => prev ? { ...prev, costumes: [...prev.costumes, newCostume] } : prev);
     }, [assets]);
@@ -461,8 +632,176 @@ export function useAssetData({ projectId }: UseAssetDataOptions) {
         handleAddTag,
         handleRemoveTag,
         handleBatchDelete,
-        handleReorderAssets,  // 🆕
+        handleReorderAssets,
+        handleBatchDeduplicate,
+        handleMergeAssets,
+        handleBatchUpdateCharacter,
         loadAssets,
-        loadProject
+        loadProject,
+        pendingAssets,
+        setPendingAssets,
+        handleConfirmStaging,
     };
+}
+
+// 内部辅助：执行批量去重逻辑
+async function performBatchDeduplicate(
+    assets: AssetLibrary,
+    projectId: string,
+    onProgress?: (msg: string) => void
+): Promise<{ updatedAssets: AssetLibrary; fixCount: number }> {
+    console.log('[一键整理] 开始全库扫描...', {
+        characterCount: assets.characters.length,
+        sceneCount: assets.scenes.length,
+        propCount: assets.props.length,
+        costumeCount: assets.costumes.length
+    });
+
+    const updatedAssets = JSON.parse(JSON.stringify(assets)) as AssetLibrary;
+    const renameMap: Record<string, string> = {}; // 旧名 -> 新名
+    let fixCount = 0;
+
+    const categories: { key: keyof AssetLibrary; label: string }[] = [
+        { key: 'characters', label: '角色' },
+        { key: 'scenes', label: '场景' },
+        { key: 'props', label: '道具' },
+        { key: 'costumes', label: '服饰' }
+    ];
+
+    for (const { key, label } of categories) {
+        const list = (updatedAssets[key] as any[]) || [];
+        if (list.length < 2) continue;
+
+        console.log(`[一键整理] 正在扫描${label}类目 (${list.length} 个项目)...`);
+        const mergedIndices = new Set<number>();
+        const newList: any[] = [];
+
+        for (let i = 0; i < list.length; i++) {
+            if (mergedIndices.has(i)) continue;
+
+            const master = list[i];
+            const duplicates: any[] = [];
+
+            for (let j = i + 1; j < list.length; j++) {
+                if (mergedIndices.has(j)) continue;
+
+                const compare = list[j];
+                const masterName = master.name || '未命名资产';
+                const compareName = compare.name || '未命名资产';
+
+                let score = 0;
+                try {
+                    score = calculateSimilarity(masterName, compareName);
+                } catch (err) {
+                    console.warn(`[一键整理] 相似度计算失败: ${masterName} vs ${compareName}`, err);
+                }
+
+                if (score >= 0.85) {
+                    console.log(`[一键整理] 发现重复${label}: [${masterName}] <-> [${compareName}], 相似度: ${score.toFixed(2)}`);
+                    duplicates.push(compare);
+                    mergedIndices.add(j);
+                    if (compare.name && master.name && compare.name !== master.name) {
+                        renameMap[compare.name] = master.name;
+                    }
+                }
+            }
+
+            // 执行合并
+            if (duplicates.length > 0) {
+                const currentAliases = master.aliases || [];
+                duplicates.forEach(dup => {
+                    // 合并别名
+                    if (dup.name !== master.name && !currentAliases.includes(dup.name)) {
+                        currentAliases.push(dup.name);
+                    }
+                    if (dup.aliases) {
+                        dup.aliases.forEach((a: string) => {
+                            if (a !== master.name && !currentAliases.includes(a)) {
+                                currentAliases.push(a);
+                            }
+                        });
+                    }
+                    // 补充缺失字段
+                    const fields = ['description', 'appearance', 'personality', 'environment', 'location', 'category', 'aiPrompt'];
+                    fields.forEach(f => {
+                        if (!master[f] && dup[f]) (master as any)[f] = (dup as any)[f];
+                    });
+                });
+                master.aliases = currentAliases;
+                fixCount += duplicates.length;
+            }
+            newList.push(master);
+        }
+        (updatedAssets as any)[key] = newList;
+    }
+
+    // 全局引用修复
+    if (Object.keys(renameMap).length > 0) {
+        await fixStoryboardReferences(projectId, renameMap, onProgress);
+    }
+
+    console.log(`[一键整理] 扫描完成。共合并了 ${fixCount} 个重复项。`);
+    return { updatedAssets, fixCount };
+}
+
+/**
+ * 修复分镜中的重命名引用
+ */
+async function fixStoryboardReferences(
+    projectId: string,
+    renameMap: Record<string, string>,
+    onProgress?: (msg: string) => void
+) {
+    console.log(`[引用修复] 准备修复 ${Object.keys(renameMap).length} 个重命名引用...`);
+    onProgress?.(`正在修复分镜引用...`);
+    try {
+        const chapters = await chapterStorage.getByProjectId(projectId);
+        for (const chapter of chapters) {
+            const storyboard = await storyboardStorage.getByChapterId(chapter.id);
+            if (storyboard && storyboard.panels) {
+                let changed = false;
+                const updatedPanels = storyboard.panels.map(panel => {
+                    let panelChanged = false;
+
+                    // 1. 角色列表修复
+                    const newChars = (panel.characters || []).map(c => {
+                        if (renameMap[c]) { panelChanged = true; return renameMap[c]; }
+                        return c;
+                    });
+
+                    // 2. 道具列表修复
+                    const newProps = (panel.props || []).map(p => {
+                        if (renameMap[p]) { panelChanged = true; return renameMap[p]; }
+                        return p;
+                    });
+
+                    // 3. 角色动作修复
+                    const newActions = (panel.characterActions || []).map(a => {
+                        let actionText = a;
+                        Object.entries(renameMap).forEach(([oldN, newN]) => {
+                            if (actionText.startsWith(`${oldN}:`)) {
+                                actionText = actionText.replace(`${oldN}:`, `${newN}:`);
+                                panelChanged = true;
+                            }
+                        });
+                        return actionText;
+                    });
+
+                    if (panelChanged) {
+                        changed = true;
+                        return { ...panel, characters: newChars, props: newProps, characterActions: newActions };
+                    }
+                    return panel;
+                });
+
+                if (changed) {
+                    console.log(`[引用修复] 修复分镜引用: ${chapter.title}`);
+                    await storyboardStorage.save({ ...storyboard, panels: updatedPanels });
+                }
+            }
+        }
+    } catch (error) {
+        console.error('[引用修复] 失败:', error);
+        throw error;
+    }
 }

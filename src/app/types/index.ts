@@ -4,3 +4,4 @@ export * from './storyboard';
 export * from './assets';
 export * from './template';
 export * from './project';
+export * from './relation';

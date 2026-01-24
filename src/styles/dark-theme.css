@@ -1,0 +1,397 @@
+/**
+ * 深色主题样式
+ * 定义深色模式下的颜色变量和样式
+ */
+
+/* ============ CSS 变量定义 ============ */
+
+:root {
+  /* 浅色主题（默认） */
+  --color-background: 255 255 255;
+  --color-foreground: 17 24 39;
+  --color-card: 255 255 255;
+  --color-card-foreground: 17 24 39;
+  --color-popover: 255 255 255;
+  --color-popover-foreground: 17 24 39;
+  --color-primary: 99 102 241;
+  --color-primary-foreground: 255 255 255;
+  --color-secondary: 243 244 246;
+  --color-secondary-foreground: 17 24 39;
+  --color-muted: 243 244 246;
+  --color-muted-foreground: 107 114 128;
+  --color-accent: 243 244 246;
+  --color-accent-foreground: 17 24 39;
+  --color-destructive: 239 68 68;
+  --color-destructive-foreground: 255 255 255;
+  --color-border: 229 231 235;
+  --color-input: 229 231 235;
+  --color-ring: 99 102 241;
+  --color-success: 34 197 94;
+  --color-warning: 251 146 60;
+  --color-info: 59 130 246;
+}
+
+.dark {
+  /* 深色主题 */
+  --color-background: 17 24 39;
+  --color-foreground: 243 244 246;
+  --color-card: 31 41 55;
+  --color-card-foreground: 243 244 246;
+  --color-popover: 31 41 55;
+  --color-popover-foreground: 243 244 246;
+  --color-primary: 129 140 248;
+  --color-primary-foreground: 17 24 39;
+  --color-secondary: 55 65 81;
+  --color-secondary-foreground: 243 244 246;
+  --color-muted: 55 65 81;
+  --color-muted-foreground: 156 163 175;
+  --color-accent: 55 65 81;
+  --color-accent-foreground: 243 244 246;
+  --color-destructive: 220 38 38;
+  --color-destructive-foreground: 255 255 255;
+  --color-border: 55 65 81;
+  --color-input: 55 65 81;
+  --color-ring: 129 140 248;
+  --color-success: 22 163 74;
+  --color-warning: 234 88 12;
+  --color-info: 37 99 235;
+}
+
+/* ============ 深色主题样式 ============ */
+
+.dark {
+  color-scheme: dark;
+}
+
+/* 背景 */
+.dark body {
+  background-color: rgb(17 24 39);
+  color: rgb(243 244 246);
+}
+
+/* 卡片 */
+.dark .card,
+.dark [class*="card"] {
+  background-color: rgb(31 41 55);
+  border-color: rgb(55 65 81);
+}
+
+/* 输入框 */
+.dark input,
+.dark textarea,
+.dark select {
+  background-color: rgb(31 41 55);
+  border-color: rgb(55 65 81);
+  color: rgb(243 244 246);
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: rgb(156 163 175);
+}
+
+.dark input:focus,
+.dark textarea:focus,
+.dark select:focus {
+  border-color: rgb(129 140 248);
+  box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.1);
+}
+
+/* 按钮 */
+.dark button:not(.btn-primary):not(.btn-danger) {
+  background-color: rgb(55 65 81);
+  color: rgb(243 244 246);
+  border-color: rgb(75 85 99);
+}
+
+.dark button:not(.btn-primary):not(.btn-danger):hover {
+  background-color: rgb(75 85 99);
+}
+
+/* 主要按钮 */
+.dark .btn-primary,
+.dark button[class*="primary"] {
+  background-color: rgb(129 140 248);
+  color: rgb(17 24 39);
+}
+
+.dark .btn-primary:hover,
+.dark button[class*="primary"]:hover {
+  background-color: rgb(99 102 241);
+}
+
+/* 边框 */
+.dark [class*="border"] {
+  border-color: rgb(55 65 81);
+}
+
+/* 分隔线 */
+.dark hr {
+  border-color: rgb(55 65 81);
+}
+
+/* 导航 */
+.dark nav {
+  background-color: rgb(31 41 55);
+  border-color: rgb(55 65 81);
+}
+
+/* 侧边栏 */
+.dark aside,
+.dark .sidebar {
+  background-color: rgb(31 41 55);
+  border-color: rgb(55 65 81);
+}
+
+/* 模态框 */
+.dark .modal,
+.dark [role="dialog"] {
+  background-color: rgb(31 41 55);
+}
+
+.dark .modal-overlay {
+  background-color: rgba(0, 0, 0, 0.7);
+}
+
+/* 下拉菜单 */
+.dark .dropdown,
+.dark [role="menu"] {
+  background-color: rgb(31 41 55);
+  border-color: rgb(55 65 81);
+}
+
+/* 工具提示 */
+.dark .tooltip {
+  background-color: rgb(55 65 81);
+  color: rgb(243 244 246);
+}
+
+/* 表格 */
+.dark table {
+  border-color: rgb(55 65 81);
+}
+
+.dark th {
+  background-color: rgb(31 41 55);
+  border-color: rgb(55 65 81);
+}
+
+.dark td {
+  border-color: rgb(55 65 81);
+}
+
+.dark tr:hover {
+  background-color: rgb(55 65 81);
+}
+
+/* 代码块 */
+.dark code,
+.dark pre {
+  background-color: rgb(31 41 55);
+  color: rgb(243 244 246);
+}
+
+/* 滚动条 */
+.dark ::-webkit-scrollbar {
+  background-color: rgb(31 41 55);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background-color: rgb(75 85 99);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(107 114 128);
+}
+
+/* 选中文本 */
+.dark ::selection {
+  background-color: rgb(129 140 248);
+  color: rgb(17 24 39);
+}
+
+/* 链接 */
+.dark a {
+  color: rgb(129 140 248);
+}
+
+.dark a:hover {
+  color: rgb(165 180 252);
+}
+
+/* 徽章 */
+.dark .badge {
+  background-color: rgb(55 65 81);
+  color: rgb(243 244 246);
+}
+
+/* 进度条 */
+.dark .progress {
+  background-color: rgb(55 65 81);
+}
+
+.dark .progress-bar {
+  background-color: rgb(129 140 248);
+}
+
+/* 开关 */
+.dark .switch {
+  background-color: rgb(75 85 99);
+}
+
+.dark .switch:checked {
+  background-color: rgb(129 140 248);
+}
+
+/* 复选框和单选框 */
+.dark input[type="checkbox"],
+.dark input[type="radio"] {
+  border-color: rgb(75 85 99);
+}
+
+.dark input[type="checkbox"]:checked,
+.dark input[type="radio"]:checked {
+  background-color: rgb(129 140 248);
+  border-color: rgb(129 140 248);
+}
+
+/* 标签页 */
+.dark .tabs {
+  border-color: rgb(55 65 81);
+}
+
+.dark .tab {
+  color: rgb(156 163 175);
+}
+
+.dark .tab:hover {
+  color: rgb(243 244 246);
+}
+
+.dark .tab.active {
+  color: rgb(129 140 248);
+  border-color: rgb(129 140 248);
+}
+
+/* 面包屑 */
+.dark .breadcrumb {
+  color: rgb(156 163 175);
+}
+
+.dark .breadcrumb a {
+  color: rgb(243 244 246);
+}
+
+/* 警告框 */
+.dark .alert {
+  background-color: rgb(31 41 55);
+  border-color: rgb(55 65 81);
+}
+
+.dark .alert-info {
+  background-color: rgb(30 58 138);
+  border-color: rgb(37 99 235);
+  color: rgb(191 219 254);
+}
+
+.dark .alert-success {
+  background-color: rgb(20 83 45);
+  border-color: rgb(22 163 74);
+  color: rgb(187 247 208);
+}
+
+.dark .alert-warning {
+  background-color: rgb(124 45 18);
+  border-color: rgb(234 88 12);
+  color: rgb(254 215 170);
+}
+
+.dark .alert-error {
+  background-color: rgb(127 29 29);
+  border-color: rgb(220 38 38);
+  color: rgb(254 202 202);
+}
+
+/* 骨架屏 */
+.dark .skeleton {
+  background: linear-gradient(
+    90deg,
+    rgb(55 65 81) 0%,
+    rgb(75 85 99) 50%,
+    rgb(55 65 81) 100%
+  );
+  background-size: 200% 100%;
+}
+
+/* 加载动画 */
+.dark .spinner {
+  border-color: rgb(75 85 99);
+  border-top-color: rgb(129 140 248);
+}
+
+/* 图片占位符 */
+.dark .image-placeholder {
+  background-color: rgb(55 65 81);
+}
+
+/* 空状态 */
+.dark .empty-state {
+  color: rgb(156 163 175);
+}
+
+/* 移动端底部导航 */
+.dark .mobile-bottom-nav {
+  background-color: rgb(31 41 55);
+  border-top-color: rgb(55 65 81);
+}
+
+/* Toast 通知 */
+.dark .toast {
+  background-color: rgb(31 41 55);
+  border-color: rgb(55 65 81);
+  color: rgb(243 244 246);
+}
+
+/* ============ 平滑过渡 ============ */
+
+* {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+/* 禁用某些元素的过渡 */
+.no-transition,
+.no-transition * {
+  transition: none !important;
+}
+
+/* ============ 图片优化 ============ */
+
+/* 深色模式下降低图片亮度 */
+.dark img:not(.no-dark-filter) {
+  filter: brightness(0.9);
+}
+
+.dark img:not(.no-dark-filter):hover {
+  filter: brightness(1);
+}
+
+/* ============ 打印样式 ============ */
+
+@media print {
+  .dark {
+    color-scheme: light;
+  }
+
+  .dark body {
+    background-color: white;
+    color: black;
+  }
+
+  .dark * {
+    background-color: white !important;
+    color: black !important;
+    border-color: #e5e7eb !important;
+  }
+}

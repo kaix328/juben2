@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 import { optimizePrompt } from '../../../utils/volcApi';
-import { exportAllPanelPrompts } from '../../../utils/promptGenerator';
+import { exportAllPanelPrompts } from '../../../utils/prompts';
 import { generateStoryboardImage } from '../../../utils/aiService';
 import { RequestQueue } from '../../../utils/requestQueue';
 import {
@@ -12,6 +12,8 @@ import {
     downloadText,
     type VideoPlatform
 } from '../../../utils/exportUtils';
+// v2.0: 导入增强的 PromptEngine
+import { PromptEngine } from '../../../utils/promptEngine';
 import type { Storyboard, StoryboardPanel, Project, AssetLibrary, Script } from '../../../types';
 import type { ExportPlatform, PanelStatus } from '../types';
 
@@ -51,31 +53,52 @@ export function useStoryboardActions({
         }
     }), [updatePanelStatus]);
 
-    // 批量重生成提示词
+    // v2.0: 批量重生成提示词（使用增强的 PromptEngine）
     const handleBatchRegeneratePrompts = useCallback(async (
         selectedIds: Set<string>,
         optimize: boolean,
         onProgress?: (current: number, total: number) => void,
-        onComplete?: () => void
+        onComplete?: () => void,
+        useEnhanced: boolean = true
     ) => {
-        if (!storyboard || !project) return;
+        if (!storyboard || !project || !assets) return;
 
         const total = selectedIds.size;
         let current = 0;
+
+        // v2.0: 创建增强的 PromptEngine
+        const engine = useEnhanced ? new PromptEngine(project.directorStyle, {
+            useProfessionalSkills: true,
+            includeNegative: false,
+            qualityTags: 'professional',
+        }) : null;
 
         const tasks = storyboard.panels
             .filter(p => selectedIds.has(p.id))
             .map(panel => ({
                 id: panel.id,
                 execute: async () => {
+                    // 🔒 如果已锁定，跳过更新
+                    if (panel.isLocked) {
+                        current++;
+                        onProgress?.(current, total);
+                        return panel; // 直接返回原面板
+                    }
+
                     let finalPrompt = panel.aiPrompt;
                     if (optimize) {
-                        // 🆕 传递完整的导演风格对象
-                        finalPrompt = await optimizePrompt(
-                            panel.description,
-                            project.directorStyle || 'Cinematic',
-                            'storyboard'
-                        );
+                        if (useEnhanced && engine) {
+                            // v2.0: 使用增强的 PromptEngine
+                            const result = engine.forStoryboardImage(panel, assets.characters, assets.scenes);
+                            finalPrompt = result.positive;
+                        } else {
+                            // v1.0: 使用原有的 AI 优化
+                            finalPrompt = await optimizePrompt(
+                                panel.description,
+                                project.directorStyle?.artStyle || 'Cinematic',
+                                'storyboard'
+                            );
+                        }
                     }
                     current++;
                     onProgress?.(current, total);
@@ -85,7 +108,7 @@ export function useStoryboardActions({
 
         queue.addTasks(tasks);
 
-        // 🆕 等待全量完成后再执行统一保存逻辑
+        // 等待全量完成后再执行统一保存逻辑
         try {
             await queue.waitForBatch(selectedIds);
 
@@ -99,7 +122,7 @@ export function useStoryboardActions({
                     return found || p;
                 });
                 await onUpdateStoryboard({ ...storyboard, panels: updatedPanels });
-                toast.success(`已完成 ${results.length} 个分镜的提示词重生成`);
+                toast.success(`已完成 ${results.length} 个分镜的提示词重生成${useEnhanced ? '（专业增强版）' : ''}`);
             }
         } catch (err) {
             console.error('[BatchRegenerate] Error:', err);
@@ -108,7 +131,7 @@ export function useStoryboardActions({
             onComplete?.();
         }
 
-    }, [storyboard, project, onUpdateStoryboard, queue]);
+    }, [storyboard, project, assets, onUpdateStoryboard, queue]);
 
     // 🆕 辅助函数：计算风格哈希
     const computeStyleHash = useCallback((style?: Project['directorStyle']): string => {
@@ -385,13 +408,55 @@ export function useStoryboardActions({
         }
     }, [storyboard, assets, project, queue, onUpdateStoryboard]);
 
-    // 生成单张提示词
-    const handleGeneratePrompts = useCallback(async (panel: StoryboardPanel) => {
-        if (!assets || !project) return;
-        const updatedPanel = { ...panel, aiPrompt: '正在生成...' };
-        // 这里只是 UI 反馈，实际逻辑通常在批量操作或 AI 提取中
-        await handleBatchRegeneratePrompts(new Set([panel.id]), true);
-    }, [assets, project, handleBatchRegeneratePrompts]);
+    // v2.0: 生成单张提示词（使用增强的 PromptEngine）
+    const handleGeneratePrompts = useCallback(async (panel: StoryboardPanel, useEnhanced: boolean = true) => {
+        if (!assets || !project || !storyboard) {
+            toast.error('项目信息未加载');
+            return;
+        }
+
+        toast.loading('正在生成提示词...', { id: `prompt-${panel.id}` });
+
+        try {
+            let optimizedPrompt: string;
+
+            if (useEnhanced) {
+                // v2.0: 使用增强的 PromptEngine（包含专业电影摄影参数）
+                const engine = new PromptEngine(project.directorStyle, {
+                    useProfessionalSkills: true,
+                    includeNegative: false, // 图像提示词不包含负面提示词
+                    qualityTags: 'professional',
+                });
+
+                const result = engine.forStoryboardImage(panel, assets.characters, assets.scenes);
+                optimizedPrompt = result.positive;
+
+                console.log('[v2.0 Enhanced] Generated prompt:', {
+                    panelId: panel.id,
+                    promptLength: optimizedPrompt.length,
+                    metadata: result.metadata,
+                });
+            } else {
+                // v1.0: 使用原有的 AI 优化方法
+                optimizedPrompt = await optimizePrompt(
+                    panel.description || '电影分镜',
+                    project.directorStyle?.artStyle || 'Cinematic',
+                    'storyboard'
+                );
+            }
+
+            // 更新分镜
+            const updatedPanels = storyboard.panels.map(p =>
+                p.id === panel.id ? { ...p, aiPrompt: optimizedPrompt } : p
+            );
+
+            await onUpdateStoryboard({ ...storyboard, panels: updatedPanels });
+            toast.success(useEnhanced ? '提示词已生成（专业增强版）' : '提示词已生成', { id: `prompt-${panel.id}` });
+        } catch (error) {
+            console.error('Failed to generate prompt:', error);
+            toast.error('生成提示词失败', { id: `prompt-${panel.id}` });
+        }
+    }, [assets, project, storyboard, onUpdateStoryboard]);
 
     // 🆕 导出为 CSV（Excel 兼容）
     const handleExportCSV = useCallback(() => {
@@ -439,7 +504,7 @@ export function useStoryboardActions({
                 });
             }
             // 从对白中提取角色
-            if (panel.dialogue) {
+            if (panel.dialogue && typeof panel.dialogue === 'string') {
                 const dialogueMatch = panel.dialogue.match(/^(.+?)[:：]/);
                 if (dialogueMatch) {
                     const charName = dialogueMatch[1].trim();
@@ -485,41 +550,42 @@ export function useStoryboardActions({
 
         // 🆕 自动添加到项目库（包含自动生成提示词）
         if (onUpdateAssets && assets) {
-            // 获取导演风格提示词前缀
-            const stylePrefix = project?.directorStyle ? [
-                project.directorStyle.artStyle,
-                project.directorStyle.colorTone,
-                project.directorStyle.lightingStyle,
-                project.directorStyle.cameraStyle,
-                project.directorStyle.mood,
-                project.directorStyle.customPrompt
-            ].filter(Boolean).join(', ') : '';
+            // v2.0: 使用 PromptEngine 生成一致的初始提示词
+            const engine = new PromptEngine(project?.directorStyle, {
+                useProfessionalSkills: true,
+                includeNegative: false
+            });
 
             const updatedAssets: AssetLibrary = {
                 ...assets,
                 characters: [
                     ...assets.characters,
                     ...newCharacters.map((c, idx) => {
-                        const basePrompt = `${c.name}, character portrait`;
-                        const fullPrompt = stylePrefix ? `${basePrompt}, ${stylePrefix}` : basePrompt;
-                        return {
+                        const tempChar = {
                             id: `char-sync-${Date.now()}-${idx}`,
                             name: c.name,
                             description: c.description,
                             appearance: '',
                             personality: '',
                             avatar: '',
-                            fullBodyPrompt: `full body portrait of ${c.name}, white background, front view, ${stylePrefix}, high quality, detailed`.trim(),
-                            facePrompt: `close-up face portrait of ${c.name}, detailed facial features, ${stylePrefix}, high quality`.trim(),
                             tags: ['从分镜同步']
+                        } as any;
+
+                        // 使用引擎生成标准提示词
+                        const fullBody = engine.forCharacterFullBody(tempChar);
+                        const face = engine.forCharacterFace(tempChar);
+
+                        return {
+                            ...tempChar,
+                            fullBodyPrompt: fullBody.positive,
+                            facePrompt: face.positive,
                         };
                     })
                 ],
                 scenes: [
                     ...assets.scenes,
                     ...newScenes.map((s, idx) => {
-                        const scenePrompt = `${s.name}, ${s.description || 'cinematic scene'}`;
-                        return {
+                        const tempScene = {
                             id: `scene-sync-${Date.now()}-${idx}`,
                             name: s.name,
                             description: s.description,
@@ -527,10 +593,19 @@ export function useStoryboardActions({
                             environment: '',
                             atmosphere: '',
                             image: '',
-                            widePrompt: `wide shot, ${scenePrompt}, ${stylePrefix}, establishing shot, high quality, detailed environment`.trim(),
-                            mediumPrompt: `medium shot, ${scenePrompt}, ${stylePrefix}, cinematic composition`.trim(),
-                            closeupPrompt: `close-up detail of ${s.name}, ${stylePrefix}, high quality`.trim(),
                             tags: ['从分镜同步']
+                        } as any;
+
+                        // 使用引擎生成标准提示词
+                        const wide = engine.forSceneWide(tempScene);
+                        const medium = engine.forSceneMedium(tempScene);
+                        const closeup = engine.forSceneCloseup(tempScene);
+
+                        return {
+                            ...tempScene,
+                            widePrompt: wide.positive,
+                            mediumPrompt: medium.positive,
+                            closeupPrompt: closeup.positive,
                         };
                     })
                 ]
@@ -548,7 +623,284 @@ export function useStoryboardActions({
 
         // 没有 onUpdateAssets 回调时，仅返回提取结果
         return { newCharacters, newScenes, saved: false };
-    }, [storyboard, assets, onUpdateAssets]);
+    }, [storyboard, assets, onUpdateAssets, project]);
+
+    // v2.0: 生成视频提示词（使用增强的 PromptEngine）
+    const handleGenerateVideoPrompt = useCallback((panel: StoryboardPanel, useEnhanced: boolean = true): string => {
+        if (!assets || !project) {
+            return panel.aiVideoPrompt || '';
+        }
+
+        if (useEnhanced) {
+            // v2.0: 使用增强的 PromptEngine（包含专业视频生成参数）
+            const engine = new PromptEngine(project.directorStyle, {
+                useProfessionalSkills: true,
+                includeNegative: false,
+                qualityTags: 'professional',
+            });
+
+            const result = engine.forStoryboardVideo(panel, assets.characters);
+            return result.positive;
+        } else {
+            // v1.0: 返回原有的视频提示词
+            return panel.aiVideoPrompt || panel.description || '';
+        }
+    }, [assets, project]);
+
+    // v2.0: 预览提示词（不保存，仅返回）
+    const handlePreviewPrompt = useCallback((panel: StoryboardPanel, type: 'image' | 'video' = 'image'): {
+        positive: string;
+        negative: string;
+        metadata?: any;
+    } => {
+        if (!assets || !project) {
+            return { positive: '', negative: '' };
+        }
+
+        const engine = new PromptEngine(project.directorStyle, {
+            useProfessionalSkills: true,
+            includeNegative: true,
+            qualityTags: 'professional',
+        });
+
+        if (type === 'image') {
+            return engine.forStoryboardImage(panel, assets.characters, assets.scenes);
+        } else {
+            return engine.forStoryboardVideo(panel, assets.characters);
+        }
+    }, [assets, project]);
+
+    // 🆕 一键优化功能
+    const handleOptimizeIssues = useCallback(async (
+        selectedIssues: any[]
+    ): Promise<any[]> => {
+        if (!storyboard?.panels) {
+            return [];
+        }
+
+        console.log('[OptimizeIssues] 开始优化', selectedIssues.length, '个问题');
+
+        const results: any[] = [];
+        const optimizedPanels = new Map<string, StoryboardPanel>();
+        const changeLog: string[] = [];
+        
+        // 第一步：收集所有需要优化的分镜
+        for (const issue of selectedIssues) {
+            try {
+                const panel = storyboard.panels.find(p => p.id === issue.panelId);
+                if (!panel) {
+                    results.push({
+                        success: false,
+                        issueId: issue.id,
+                        error: '未找到对应分镜',
+                    });
+                    continue;
+                }
+
+                // 获取已优化的版本或原始版本
+                let optimizedPanel = optimizedPanels.get(panel.id) || { ...panel };
+                let optimized = false;
+                let changes: string[] = [];
+
+                // 1. 时长问题优化
+                if (issue.type === 'duration') {
+                    if (issue.message.includes('过短')) {
+                        const oldDuration = optimizedPanel.duration || 0;
+                        optimizedPanel.duration = Math.max(oldDuration, 3);
+                        optimized = true;
+                        changes.push(`时长: ${oldDuration}s → ${optimizedPanel.duration}s`);
+                    } else if (issue.message.includes('过长')) {
+                        const oldDuration = optimizedPanel.duration || 0;
+                        optimizedPanel.duration = Math.min(oldDuration, 10);
+                        optimized = true;
+                        changes.push(`时长: ${oldDuration}s → ${optimizedPanel.duration}s`);
+                    } else if (issue.message.includes('对话时长不足')) {
+                        // 根据对话长度计算合适的时长
+                        const dialogue = optimizedPanel.dialogue || '';
+                        const estimatedDuration = Math.ceil(dialogue.length / 4);
+                        optimizedPanel.duration = Math.max(3, Math.min(15, estimatedDuration));
+                        optimized = true;
+                        changes.push(`调整时长以匹配对话: ${optimizedPanel.duration}s`);
+                    }
+                }
+
+                // 2. 镜头问题优化
+                if (issue.type === 'shot') {
+                    if (issue.message.includes('缺少画面描述')) {
+                        const characters = optimizedPanel.characters?.join('、') || '角色';
+                        const shot = optimizedPanel.shot || '镜头';
+                        optimizedPanel.description = `${shot}：${characters}在场景中`;
+                        optimized = true;
+                        changes.push('添加基础画面描述');
+                    }
+                    if (issue.message.includes('缺少景别')) {
+                        optimizedPanel.shot = '中景';
+                        optimized = true;
+                        changes.push('设置默认景别: 中景');
+                    }
+                    if (issue.message.includes('缺少建立镜头')) {
+                        optimizedPanel.shot = '全景';
+                        optimizedPanel.notes = (optimizedPanel.notes || '') + ' [建立镜头]';
+                        optimized = true;
+                        changes.push('设置为建立镜头');
+                    }
+                }
+
+                // 3. 角色问题优化
+                if (issue.type === 'character') {
+                    if (issue.message.includes('有对话但没有角色')) {
+                        // 尝试从前一个分镜获取角色
+                        const panelIndex = storyboard.panels.findIndex(p => p.id === panel.id);
+                        if (panelIndex > 0) {
+                            const prevPanel = storyboard.panels[panelIndex - 1];
+                            if (prevPanel.characters && prevPanel.characters.length > 0) {
+                                optimizedPanel.characters = [...prevPanel.characters];
+                                optimized = true;
+                                changes.push(`添加角色: ${prevPanel.characters.join('、')}`);
+                            }
+                        }
+                    }
+                    if (issue.message.includes('突然消失') || issue.message.includes('突然出现')) {
+                        // 这类问题需要重新生成提示词以保持一致性
+                        if (assets && project) {
+                            const engine = new PromptEngine(project.directorStyle, {
+                                useProfessionalSkills: true,
+                            });
+                            const result = engine.forStoryboardImage(optimizedPanel, assets.characters, assets.scenes);
+                            optimizedPanel.aiPrompt = result.positive;
+                            optimized = true;
+                            changes.push('更新提示词以保持角色一致性');
+                        }
+                    }
+                }
+
+                // 4. 对话问题优化
+                if (issue.type === 'dialogue') {
+                    if (issue.message.includes('对话过长')) {
+                        const dialogue = optimizedPanel.dialogue || '';
+                        if (dialogue.length > 200) {
+                            optimizedPanel.dialogue = dialogue.substring(0, 200) + '...';
+                            optimizedPanel.notes = (optimizedPanel.notes || '') + ' [对话已截断，建议拆分分镜]';
+                            optimized = true;
+                            changes.push('截断过长对话');
+                        }
+                    }
+                    if (issue.message.includes('缺少标点符号')) {
+                        const dialogue = optimizedPanel.dialogue || '';
+                        if (dialogue && !dialogue.match(/[。！？!?…]/)) {
+                            optimizedPanel.dialogue = dialogue + '。';
+                            optimized = true;
+                            changes.push('添加标点符号');
+                        }
+                    }
+                }
+
+                // 5. 连贯性问题优化
+                if (issue.type === 'continuity') {
+                    if (issue.message.includes('连续') && issue.message.includes('相同景别')) {
+                        // 改变景别
+                        const shotSequence = ['大远景', '远景', '全景', '中景', '近景', '特写', '大特写'];
+                        const currentIndex = shotSequence.indexOf(optimizedPanel.shot);
+                        if (currentIndex > 0 && currentIndex < shotSequence.length - 1) {
+                            optimizedPanel.shot = shotSequence[currentIndex + 1];
+                            optimized = true;
+                            changes.push(`调整景别: ${shotSequence[currentIndex]} → ${optimizedPanel.shot}`);
+                        }
+                    }
+                    if (issue.message.includes('景别跳跃过大')) {
+                        // 这类问题建议手动处理，但可以添加提示
+                        optimizedPanel.notes = (optimizedPanel.notes || '') + ' [注意：景别跳跃较大]';
+                        optimized = true;
+                        changes.push('添加景别跳跃提示');
+                    }
+                }
+
+                // 6. 提示词问题优化
+                if (issue.type === 'prompt') {
+                    if (assets && project) {
+                        const engine = new PromptEngine(project.directorStyle, {
+                            useProfessionalSkills: true,
+                        });
+                        const result = engine.forStoryboardImage(optimizedPanel, assets.characters, assets.scenes);
+                        optimizedPanel.aiPrompt = result.positive;
+                        optimized = true;
+                        changes.push('重新生成提示词');
+                    }
+                }
+
+                // 7. 逻辑问题优化
+                if (issue.type === 'logic') {
+                    if (issue.message.includes('编号不连续')) {
+                        const panelIndex = storyboard.panels.findIndex(p => p.id === panel.id);
+                        optimizedPanel.panelNumber = panelIndex + 1;
+                        optimized = true;
+                        changes.push(`修正编号: ${optimizedPanel.panelNumber}`);
+                    }
+                    // ID重复问题需要手动处理
+                }
+
+                if (optimized) {
+                    optimizedPanels.set(panel.id, optimizedPanel);
+                    const changeDesc = changes.join('; ');
+                    changeLog.push(`分镜#${panel.panelNumber}: ${changeDesc}`);
+                    results.push({
+                        success: true,
+                        issueId: issue.id,
+                        panelId: panel.id,
+                        changes: changeDesc,
+                    });
+                    console.log(`[OptimizeIssues] 优化分镜#${panel.panelNumber}:`, changeDesc);
+                } else {
+                    results.push({
+                        success: false,
+                        issueId: issue.id,
+                        error: '无法自动优化此类问题',
+                    });
+                }
+            } catch (error) {
+                console.error('[OptimizeIssues] 优化失败:', error);
+                results.push({
+                    success: false,
+                    issueId: issue.id,
+                    error: error instanceof Error ? error.message : '优化失败',
+                });
+            }
+        }
+
+        // 第二步：统一更新所有优化后的分镜
+        if (optimizedPanels.size > 0) {
+            console.log('[OptimizeIssues] 应用优化到', optimizedPanels.size, '个分镜');
+            const updatedStoryboard = {
+                ...storyboard,
+                panels: storyboard.panels.map(p =>
+                    optimizedPanels.has(p.id) ? optimizedPanels.get(p.id)! : p
+                ),
+            };
+            await onUpdateStoryboard(updatedStoryboard);
+            console.log('[OptimizeIssues] 优化已保存');
+        }
+
+        // 显示优化结果
+        const successCount = results.filter(r => r.success).length;
+        if (successCount > 0) {
+            toast.success(`成功优化 ${successCount} 个问题`, {
+                description: changeLog.slice(0, 3).join('\n'),
+                duration: 5000,
+            });
+        }
+        if (successCount < results.length) {
+            const failedCount = results.length - successCount;
+            toast.warning(`${failedCount} 个问题无法自动优化，请手动处理`);
+        }
+
+        console.log('[OptimizeIssues] 优化完成:', {
+            total: results.length,
+            success: successCount,
+            failed: results.length - successCount,
+        });
+
+        return results;
+    }, [storyboard, assets, project, onUpdateStoryboard]);
 
     return {
         handleBatchRegeneratePrompts,
@@ -567,7 +919,11 @@ export function useStoryboardActions({
         handleExportCSV,
         handleExportVideoPrompts,
         handleSyncToAssetLibrary,
-        // 🆕 队列控制方法
+        // v2.0: 新增方法
+        handleGenerateVideoPrompt,
+        handlePreviewPrompt,
+        handleOptimizeIssues, // 🆕 一键优化
+        // 队列控制方法
         cancelAllTasks: () => queue.cancelAll(),
         retryFailedTasks: (ids?: Set<string>) => queue.retryFailed(ids),
         getQueueStats: () => queue.getStats(),

@@ -1,0 +1,184 @@
+# 导演风格模块 Skills
+
+## 模块概述
+导演风格模块负责管理项目的整体视觉风格设定，自动应用到所有AI提示词生成。
+
+## 核心文件
+- `src/app/pages/DirectorStyleEditor.tsx` - 导演风格编辑器
+- `src/app/utils/hooks/useDirectorStyle.ts` - 风格管理Hook
+- `src/app/types/style.ts` - 风格类型定义
+- `src/app/constants/director-style-options.ts` - 风格选项常量
+- `src/app/utils/prompts/director-style-presets.ts` - 风格预设
+
+## 功能实现
+
+### 1. 导演风格数据结构
+```typescript
+interface DirectorStyle {
+  artStyle: string;           // 艺术风格
+  colorTone: string;          // 色调设定
+  lightingStyle: string;      // 光照风格
+  cameraStyle: string;        // 镜头风格
+  mood: string;               // 情绪氛围
+  aspectRatio?: AspectRatio;  // 画面比例
+  videoFrameRate?: FrameRate; // 视频帧率
+  motionIntensity?: MotionIntensity; // 运动强度
+  customPrompt?: string;      // 自定义提示词
+  negativePrompt?: string;    // 负面提示词
+}
+```
+
+### 2. 风格选项
+
+#### 艺术风格
+```typescript
+const ART_STYLE_OPTIONS = [
+  '写实电影', '手绘动画', '3D渲染', '水彩风格',
+  '油画风格', '漫画风格', '像素艺术', '赛博朋克',
+  '蒸汽朋克', '奇幻史诗', '黑白电影', '复古胶片'
+];
+```
+
+#### 色调设定
+```typescript
+const COLOR_TONE_OPTIONS = [
+  '温暖明亮', '冷峻深沉', '梦幻唯美', '高对比度',
+  '低饱和度', '霓虹色彩', '自然色调', '复古色调'
+];
+```
+
+#### 光照风格
+```typescript
+const LIGHTING_STYLE_OPTIONS = [
+  '自然光', '戏剧性光影', '柔和漫射', '逆光剪影',
+  '霓虹灯光', '烛光氛围', '月光', '黄金时刻'
+];
+```
+
+#### 镜头风格
+```typescript
+const CAMERA_STYLE_OPTIONS = [
+  '电影感', '纪录片风格', '手持摄影', '稳定器跟拍',
+  '航拍视角', '微距特写', '广角畸变', '长焦压缩'
+];
+```
+
+### 3. 风格预设模板
+```typescript
+// 位置: utils/prompts/director-style-presets.ts
+const DIRECTOR_STYLE_PRESETS = {
+  // 动画大师
+  '宫崎骏': {
+    artStyle: '手绘动画',
+    colorTone: '温暖明亮',
+    lightingStyle: '自然光',
+    mood: '治愈温馨',
+    customPrompt: 'Studio Ghibli style, hand-drawn animation...'
+  },
+  '新海诚': {
+    artStyle: '精细动画',
+    colorTone: '梦幻唯美',
+    lightingStyle: '黄金时刻',
+    mood: '浪漫忧伤',
+    customPrompt: 'Makoto Shinkai style, detailed backgrounds...'
+  },
+  // 电影导演
+  '诺兰': {
+    artStyle: '写实电影',
+    colorTone: '冷峻深沉',
+    lightingStyle: '戏剧性光影',
+    mood: '紧张悬疑'
+  },
+  '王家卫': {
+    artStyle: '写实电影',
+    colorTone: '霓虹色彩',
+    lightingStyle: '霓虹灯光',
+    mood: '孤独浪漫'
+  },
+  // 主题工厂
+  '赛博朋克': { ... },
+  '蒸汽朋克': { ... },
+  '奇幻史诗': { ... }
+};
+
+const PRESET_CATEGORIES = {
+  '动画大师': ['宫崎骏', '新海诚', '今敏', '庵野秀明'],
+  '电影导演': ['诺兰', '王家卫', '韦斯安德森', '大卫芬奇'],
+  '主题工厂': ['赛博朋克', '蒸汽朋克', '奇幻史诗', '末日废土']
+};
+```
+
+### 4. 风格应用设置
+```typescript
+interface StyleApplicationSettings {
+  confirmBeforeApply: boolean;   // 应用前确认
+  protectManualEdits: boolean;   // 保护手动编辑
+  showPreview: boolean;          // 显示预览
+}
+```
+
+### 5. 批量应用风格
+```typescript
+// 位置: hooks/useDirectorStyle.ts
+// 功能：将风格应用到所有分镜面板
+const { handleApplyStyleToAllPanels } = useStyleBatchApply(
+  projectId,
+  style,
+  handleSave
+);
+```
+
+## 组件结构
+
+```
+DirectorStyleEditor.tsx
+├── PageHeader          # 页面头部（保存/重置/应用按钮）
+├── StylePresetSelector # 风格预设选择器
+├── StyleSelect (x8)    # 各风格参数选择器
+├── CustomPrompt        # 自定义提示词输入
+├── NegativePrompt      # 负面提示词输入
+├── StylePreview        # 风格预览面板
+└── StyleApplicationSettingsPanel # 应用设置
+```
+
+## 风格应用范围
+
+导演风格会自动应用到：
+1. 项目库角色AI提示词
+2. 项目库场景AI提示词
+3. 分镜AI绘画提示词
+4. 分镜AI视频提示词
+
+## 提示词生成示例
+
+```typescript
+// 基于导演风格生成提示词
+function generatePromptWithStyle(
+  basePrompt: string,
+  style: DirectorStyle
+): string {
+  let prompt = basePrompt;
+  
+  if (style.artStyle) prompt += `, ${style.artStyle} style`;
+  if (style.colorTone) prompt += `, ${style.colorTone}`;
+  if (style.lightingStyle) prompt += `, ${style.lightingStyle} lighting`;
+  if (style.mood) prompt += `, ${style.mood} mood`;
+  if (style.customPrompt) prompt += `, ${style.customPrompt}`;
+  
+  return prompt;
+}
+```
+
+## 开发规范
+
+1. **风格存储**: 保存在 Project.directorStyle 字段
+2. **预设应用**: 点击预设直接覆盖当前设置
+3. **实时预览**: 修改后立即显示预览效果
+4. **负面提示词**: 用于避免AI生成不需要的内容
+
+## 注意事项
+
+- 风格修改后需手动保存
+- 批量应用会影响所有分镜
+- 支持保护手动编辑的提示词
+- 自定义提示词建议使用英文

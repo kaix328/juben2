@@ -1,0 +1,78 @@
+# 章节原文编辑模块 Skills
+
+## 模块概述
+章节原文编辑模块负责管理章节的原始文本内容，并提供AI智能分析功能。
+
+## 核心文件
+- `src/app/pages/ChapterEditor/index.tsx` - 章节编辑器主组件
+- `src/app/pages/ChapterEditor/components/AnalysisSidebar.tsx` - AI分析侧边栏
+- `src/app/pages/ChapterEditor/hooks/useScriptAnalysis.ts` - 剧本分析Hook
+
+## 功能实现
+
+### 1. 原文编辑
+```typescript
+// 位置: src/app/pages/ChapterEditor/index.tsx
+// 功能：
+// - 大文本区域编辑
+// - 实时字数统计
+// - 自动保存提示
+// - 可折叠的AI分析侧边栏
+```
+
+### 2. AI智能分析
+```typescript
+// 位置: hooks/useScriptAnalysis.ts
+// 功能：
+// - 自动识别角色
+// - 自动识别场景
+// - 自动识别道具
+// - 一键添加到项目库
+```
+
+### 3. 侧边栏功能
+```typescript
+// 位置: components/AnalysisSidebar.tsx
+// 功能：
+// - 显示AI分析结果
+// - 分类展示检测到的资产
+// - 支持批量添加到项目库
+```
+
+## 组件结构
+
+```
+ChapterEditor/
+├── index.tsx           # 主组件
+├── components/
+│   └── AnalysisSidebar.tsx  # 分析侧边栏
+└── hooks/
+    └── useScriptAnalysis.ts # 分析逻辑Hook
+```
+
+## 数据流
+
+1. 用户输入/粘贴原文
+2. 点击"AI分析"按钮
+3. 调用 `useScriptAnalysis` Hook
+4. 显示检测到的角色、场景、道具
+5. 用户选择添加到项目库
+6. 保存原文到 IndexedDB
+
+## 开发规范
+
+1. **编辑器样式**: 使用等宽字体 (`font-mono`)
+2. **侧边栏动画**: 使用 `animate-in slide-in-from-right` 动画
+3. **状态管理**: 使用 `useState` 管理本地状态
+4. **数据同步**: 使用 `useEffect` 同步章节数据
+
+## 快捷键支持
+
+- `Ctrl+S` - 保存原文
+- 侧边栏可通过按钮切换显示/隐藏
+
+## 注意事项
+
+- 原文编辑区域应占满可用高度
+- 字数统计显示在右下角
+- AI分析需要原文内容不为空

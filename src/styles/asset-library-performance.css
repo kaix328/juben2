@@ -1,0 +1,100 @@
+/**
+ * 资源库性能优化 CSS
+ * 使用 content-visibility 和 contain 属性优化渲染性能
+ */
+
+/* 资源卡片性能优化 */
+.asset-card {
+  /* 内容可见性优化 - 屏幕外的卡片不渲染 */
+  content-visibility: auto;
+  contain-intrinsic-size: 320px;
+  
+  /* 隔离优化 */
+  contain: layout style paint;
+}
+
+/* 资源列表容器 */
+.asset-grid {
+  /* 布局隔离 */
+  contain: layout;
+}
+
+/* 大型列表滚动优化 */
+.asset-list-container {
+  /* 开启 GPU 加速 */
+  will-change: transform;
+  
+  /* 滚动性能 */
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* 图片懒加载占位 */
+.asset-image-placeholder {
+  /* 固定尺寸避免布局偏移 */
+  aspect-ratio: 3 / 4;
+  background: linear-gradient(135deg, #f5f5f5 0%, #e5e5e5 100%);
+  
+  /* 加载动画 */
+  animation: shimmer 2s infinite linear;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* 对话框性能优化 */
+.asset-dialog-content {
+  /* 隔离对话框渲染 */
+  contain: layout style;
+}
+
+/* 工具栏固定定位优化 */
+.asset-toolbar {
+  /* 使工具栏在滚动时保持流畅 */
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* 批量操作栏 */
+.batch-actions-bar {
+  /* 防止遮挡导致的重绘 */
+  contain: layout paint;
+  isolation: isolate;
+}
+
+/* 搜索输入框防抖样式 */
+.search-input-container {
+  /* 隔离输入框重绘 */
+  contain: layout;
+}
+
+/* 标签筛选区域 */
+.tag-filter-container {
+  /* 优化滚动性能 */
+  contain: layout style;
+  overflow-y: auto;
+  max-height: 160px;
+  
+  /* 平滑滚动 */
+  scroll-behavior: smooth;
+}
+
+/* 减少重绘的状态变化 */
+.asset-card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* 禁用非必要动画（用户偏好） */
+@media (prefers-reduced-motion: reduce) {
+  .asset-card,
+  .asset-card-hover {
+    transition: none !important;
+    animation: none !important;
+  }
+}

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardHeader } from '../../components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
@@ -8,6 +8,9 @@ import { toast } from 'sonner';
 import { useAssetData, AssetType } from './hooks/useAssetData';
 import { useImageGeneration } from './hooks/useImageGeneration';
 import { useAssetUsage } from './hooks/useAssetUsage';
+import { useRelationGraph } from '../../hooks/useRelationGraph';
+import { useAutoBackup } from '../../hooks/useAutoBackup';
+import { useAssetAnalytics } from '../../hooks/useAssetAnalytics';
 
 // Components
 import { AssetLibraryHeader } from './components/AssetLibraryHeader';
@@ -18,8 +21,19 @@ import {
     CharacterTab,
     SceneTab,
     PropTab,
-    CostumeTab
+    CostumeTab,
+    AssetStagingDialog
 } from '../../components/asset-library';
+import { RelationGraphDialog } from '../../components/RelationGraphDialog';
+import { RelationPreviewDialog } from '../../components/asset-library/RelationPreviewDialog';
+import { BackupManagerDialog } from '../../components/BackupManagerDialog';
+import { AnalyticsDashboardDialog } from '../../components/AnalyticsDashboardDialog';
+import { AssetAdviceDialog } from './components/AssetAdviceDialog';
+import { PromptPreviewDialog } from '../../components/PromptPreviewDialog'; // 🆕
+import { BatchGenerationDialog } from '../../components/BatchGenerationDialog'; // 🆕
+import { AssetAdvisor, AssetAdvice } from '../../utils/ai/assetAdvisor';
+import { promptService } from '../../services/aiService';
+import { exportAssetAnalyticsCSV } from '../../utils/analytics/assetExport';
 
 export function AssetLibrary() {
     const { projectId } = useParams<{ projectId: string }>();
@@ -39,6 +53,7 @@ export function AssetLibrary() {
         handleAIExtract,
         handleSyncDirectorStyle,
         handleUpdateCharacter,
+        handleBatchUpdateCharacter,
         handleAddCharacter,
         handleDeleteCharacter,
         handleUpdateScene,
@@ -54,14 +69,29 @@ export function AssetLibrary() {
         handleRemoveTag,
         handleBatchDelete,
         handleReorderAssets,
+        handleBatchDeduplicate,
+        handleMergeAssets,
+        pendingAssets,
+        setPendingAssets,
+        handleConfirmStaging,
     } = useAssetData({ projectId });
 
     // 2. 图片生成 Hook
     const {
         enablePromptOptimization,
         setEnablePromptOptimization,
-        isBatchGenerating,  // 🆕
-        batchProgress,      // 🆕
+        enablePromptPreview, // 🆕
+        setEnablePromptPreview, // 🆕
+        promptPreview, // 🆕
+        confirmPreviewAndGenerate, // 🆕
+        cancelPreview, // 🆕
+        isBatchGenerating,
+        batchProgress,
+        batchTasks, // 🆕
+        batchPaused, // 🆕
+        setBatchPaused, // 🆕
+        batchCancelled, // 🆕
+        setBatchCancelled, // 🆕
         handleGenerateCharacterFullBody,
         handleGenerateCharacterFace,
         handleGenerateSceneWide,
@@ -69,7 +99,7 @@ export function AssetLibrary() {
         handleGenerateSceneCloseup,
         handleGenerateProp,
         handleGenerateCostume,
-        handleBatchGenerateAll  // 🆕
+        handleBatchGenerateAll
     } = useImageGeneration({
         assets,
         project,
@@ -88,6 +118,32 @@ export function AssetLibrary() {
         getCostumeUsageLocations
     } = useAssetUsage({ projectId, assets, setAssets });
 
+    // 4. 关系图谱 Hook
+    const {
+        exportGraphData,
+        analyzeRelations,
+        batchAddRelations,
+        addRelation,
+        updateRelation,
+        deleteRelation,
+        clearRelations,
+        loadRelations,
+    } = useRelationGraph(projectId || '');
+
+    // 5. 自动备份 Hook
+    const {
+        createBackup,
+        getBackups,
+        restoreBackup,
+        deleteBackup,
+        exportBackup,
+        importBackup,
+        getStorageUsage,
+    } = useAutoBackup(projectId || '', assets);
+
+    // 6. 数据分析 Hook
+    const analytics = useAssetAnalytics(assets, usageMap);
+
     // UI 状态
     const [searchTerm, setSearchTerm] = useState('');
     const [showExtractDialog, setShowExtractDialog] = useState(false);
@@ -98,6 +154,16 @@ export function AssetLibrary() {
     const [selectedCostumeId, setSelectedCostumeId] = useState<string | null>(null);
     const [groupBy, setGroupBy] = useState<'none' | 'tags' | 'source'>('none');
     const importInputRef = useRef<HTMLInputElement>(null);
+
+    // 高级功能对话框状态
+    const [showRelationGraph, setShowRelationGraph] = useState(false);
+    const [showAnalytics, setShowAnalytics] = useState(false);
+    const [showBackupManager, setShowBackupManager] = useState(false);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [showPreviewDialog, setShowPreviewDialog] = useState(false);
+    const [previewRelations, setPreviewRelations] = useState<any[]>([]);
+    const [advisorOpen, setAdvisorOpen] = useState(false);
+    const [advice, setAdvice] = useState<AssetAdvice[]>([]);
 
     // 选项卡管理
     const getInitialTab = (): AssetType => {
@@ -177,6 +243,162 @@ export function AssetLibrary() {
         reader.readAsText(file);
     };
 
+    // 关系图谱处理函数
+    const handleAutoAnalyzeRelations = useCallback(() => {
+        if (!assets) return;
+        setIsAnalyzing(true);
+        setTimeout(() => {
+            const results = analyzeRelations(
+                assets.characters,
+                assets.scenes,
+                assets.props,
+                assets.costumes
+            );
+
+            if (results.length === 0) {
+                toast.info('未发现新的关系');
+                setIsAnalyzing(false);
+                return;
+            }
+
+            // 补充 Label 信息以便预览
+            const enhancedResults = results.map(rel => {
+                const getLabel = (id: string, type: string) => {
+                    let item: any;
+                    if (type === 'character') item = assets.characters.find(c => c.id === id);
+                    else if (type === 'scene') item = assets.scenes.find(s => s.id === id);
+                    else if (type === 'prop') item = assets.props.find(p => p.id === id);
+                    else if (type === 'costume') item = assets.costumes.find(c => c.id === id);
+                    return item ? item.name : id;
+                };
+
+                return {
+                    ...rel,
+                    fromLabel: getLabel(rel.fromId, rel.fromType),
+                    toLabel: getLabel(rel.toId, rel.toType),
+                };
+            });
+
+            setPreviewRelations(enhancedResults);
+            setShowPreviewDialog(true);
+            setIsAnalyzing(false);
+        }, 100);
+    }, [analyzeRelations, assets]);
+
+    const handleConfirmAnalysis = async (selectedRelations: any[]) => {
+        try {
+            await batchAddRelations(selectedRelations.map(rel => ({
+                fromId: rel.fromId,
+                fromType: rel.fromType,
+                toId: rel.toId,
+                toType: rel.toType,
+                relationType: rel.relationType,
+                strength: rel.strength,
+                description: rel.description,
+            })));
+            toast.success(`已添加 ${selectedRelations.length} 个新关系`);
+        } catch (error) {
+            toast.error('添加关系失败');
+        }
+    };
+
+    const handleRefreshGraph = () => {
+        setShowRelationGraph(false);
+        setTimeout(() => setShowRelationGraph(true), 1000);
+    };
+
+    // AI 优化建议处理函数
+    const handleShowAssetAdvisor = useCallback(() => {
+        if (!assets || !analytics) {
+            toast.error('资料库分析尚未就绪');
+            return;
+        }
+        const generatedAdvice = AssetAdvisor.generateAdvice(assets, analytics);
+        setAdvice(generatedAdvice);
+        setAdvisorOpen(true);
+    }, [assets, analytics]);
+
+    const handleAIOptimizePrompt = useCallback(async (item: AssetAdvice) => {
+        if (!item.affectedIds[0] || !item.metadata) return;
+
+        const assetId = item.affectedIds[0];
+        const { category, currentVal, assetName } = item.metadata;
+
+        const toastId = toast.loading(`正在为 ${assetName} 优化提示词...`);
+
+        try {
+            const result = await promptService.optimize({
+                description: currentVal,
+                resourceType: category === 'characters' ? 'character' :
+                    category === 'scenes' ? 'scene' :
+                        category === 'props' ? 'prop' : 'costume'
+            });
+
+            if (result.success && result.data) {
+                // 更新资产
+                if (category === 'characters') {
+                    await handleUpdateCharacter(assetId, {
+                        fullBodyPrompt: result.data,
+                        facePrompt: result.data
+                    });
+                } else if (category === 'scenes') {
+                    await handleUpdateScene(assetId, {
+                        widePrompt: result.data,
+                        mediumPrompt: result.data,
+                        closeupPrompt: result.data
+                    });
+                } else if (category === 'props') {
+                    await handleUpdateProp(assetId, { aiPrompt: result.data });
+                } else if (category === 'costumes') {
+                    await handleUpdateCostume(assetId, { aiPrompt: result.data });
+                }
+
+                toast.success('提示词优化成功并已回填', { id: toastId });
+            } else {
+                toast.error(`优化失败: ${result.error}`, { id: toastId });
+            }
+        } catch (error) {
+            console.error('Prompt optimization error:', error);
+            toast.error('请求失败，请稍后重试', { id: toastId });
+        }
+    }, [handleUpdateCharacter, handleUpdateScene, handleUpdateProp, handleUpdateCostume]);
+
+    const handleAcceptAdvice = useCallback((item: AssetAdvice) => {
+        setAdvisorOpen(false);
+        if (item.type === 'complete' && item.affectedIds.length > 0) {
+            const id = item.affectedIds[0];
+            setSearchTerm(id);
+            toast.info(`已为您定位到：${item.title}`);
+        } else if (item.type === 'merge' && item.affectedIds.length >= 2 && item.metadata?.category) {
+            handleMergeAssets(item.metadata.category, item.affectedIds[0], item.affectedIds[1]);
+        } else if (item.type === 'refine') {
+            handleAIOptimizePrompt(item);
+        } else if (item.type === 'cleanup' && item.affectedIds.length > 0) {
+            setSearchTerm(item.affectedIds[0]);
+            toast.info('已为您定位到闲置资产，您可以手动确认并删除');
+        } else {
+            toast.info('该建议项由于信息不足，请手动处理');
+        }
+    }, [handleMergeAssets, handleAIOptimizePrompt]);
+
+    // 资产跳转定位逻辑（用于数据分析）
+    const handleAssetJump = useCallback((id: string, type: AssetType) => {
+        handleTabChange(type);
+
+        if (type === 'character') setSelectedCharacterId(id);
+        else if (type === 'scene') setSelectedSceneId(id);
+        else if (type === 'prop') setSelectedPropId(id);
+        else if (type === 'costume') setSelectedCostumeId(id);
+
+        setShowAnalytics(false);
+        toast.success(`已定位到资产`);
+    }, []);
+
+    // 加载已保存的关系图谱数据
+    useEffect(() => {
+        loadRelations();
+    }, [loadRelations]);
+
     if (!projectId) return null;
 
     return (
@@ -200,10 +422,15 @@ export function AssetLibrary() {
                 onExport={handleExport}
                 onImportClick={() => importInputRef.current?.click()}
                 importInputRef={importInputRef as any}
-                enablePromptOptimization={enablePromptOptimization}
-                setEnablePromptOptimization={setEnablePromptOptimization}
                 groupBy={groupBy}
                 onGroupByChange={setGroupBy}
+                onShowRelationGraph={() => setShowRelationGraph(true)}
+                onShowAnalytics={() => setShowAnalytics(true)}
+                onShowBackupManager={() => setShowBackupManager(true)}
+                onBatchDeduplicate={handleBatchDeduplicate}
+                onShowAssetAdvisor={handleShowAssetAdvisor}
+                enablePromptPreview={enablePromptPreview}
+                onTogglePromptPreview={setEnablePromptPreview}
             />
             <input
                 type="file"
@@ -244,6 +471,7 @@ export function AssetLibrary() {
                                     setSelectedCharacterId={setSelectedCharacterId}
                                     handleAddCharacter={handleAddCharacter}
                                     handleUpdateCharacter={handleUpdateCharacter}
+                                    handleBatchUpdateCharacter={handleBatchUpdateCharacter}
                                     handleDeleteCharacter={(id) => handleDeleteCharacter(id, usageMap.get(id) || 0)}
                                     handleAddTag={handleAddTag as any}
                                     handleRemoveTag={handleRemoveTag as any}
@@ -346,6 +574,135 @@ export function AssetLibrary() {
                     showPreview={styleSettings.showPreview}
                 />
             )}
+
+            {/* 资产审核暂存区弹窗 */}
+            <AssetStagingDialog
+                open={!!pendingAssets}
+                onOpenChange={(open: boolean) => !open && setPendingAssets(null)}
+                pendingAssets={pendingAssets || []}
+                existingAssets={useMemo(() => {
+                    if (!assets) return [];
+                    return [
+                        ...assets.characters.map(c => ({ ...c, type: 'character' as const })),
+                        ...assets.scenes.map(s => ({ ...s, type: 'scene' as const })),
+                        ...assets.props.map(p => ({ ...p, type: 'prop' as const })),
+                        ...assets.costumes.map(c => ({ ...c, type: 'costume' as const })),
+                    ];
+                }, [assets])}
+                onConfirm={handleConfirmStaging}
+            />
+
+            {/* 关系图谱对话框 */}
+            <RelationGraphDialog
+                open={showRelationGraph}
+                onOpenChange={setShowRelationGraph}
+                {...exportGraphData(assets?.characters || [], assets?.scenes || [], assets?.props || [], assets?.costumes || [])}
+                onNodeClick={(nodeId: string, nodeType: string) => {
+                    const typeToTab: Record<string, AssetType> = {
+                        'character': 'character',
+                        'scene': 'scene',
+                        'prop': 'prop',
+                        'costume': 'costume'
+                    };
+                    const tab = typeToTab[nodeType];
+                    if (tab) {
+                        setActiveTab(tab);
+                        if (nodeType === 'character') setSelectedCharacterId(nodeId);
+                        else if (nodeType === 'scene') setSelectedSceneId(nodeId);
+                        else if (nodeType === 'prop') setSelectedPropId(nodeId);
+                        else if (nodeType === 'costume') setSelectedCostumeId(nodeId);
+                        setShowRelationGraph(false);
+                    }
+                }}
+                onAutoAnalyze={handleAutoAnalyzeRelations}
+                onRefresh={handleRefreshGraph}
+                isAnalyzing={isAnalyzing}
+                onAddRelation={addRelation}
+                onUpdateRelation={updateRelation}
+                onDeleteRelation={deleteRelation}
+                onClearRelations={clearRelations}
+            />
+
+            {/* 关系预览对话框 */}
+            <RelationPreviewDialog
+                open={showPreviewDialog}
+                onOpenChange={setShowPreviewDialog}
+                relations={previewRelations}
+                onConfirm={handleConfirmAnalysis}
+            />
+
+            {/* 数据分析对话框 */}
+            <AnalyticsDashboardDialog
+                open={showAnalytics}
+                onOpenChange={setShowAnalytics}
+                analytics={analytics}
+                onExportReport={() => {
+                    if (analytics) {
+                        exportAssetAnalyticsCSV(analytics);
+                        toast.success('报表导出成功');
+                    }
+                }}
+                onAssetClick={handleAssetJump}
+            />
+
+            {/* 备份管理对话框 */}
+            <BackupManagerDialog
+                open={showBackupManager}
+                onOpenChange={setShowBackupManager}
+                backups={getBackups()}
+                onRestore={(key) => {
+                    const data = restoreBackup(key);
+                    if (data) {
+                        toast.success('备份已恢复，页面将刷新');
+                        setTimeout(() => window.location.reload(), 1000);
+                    }
+                }}
+                onDelete={deleteBackup}
+                onExport={exportBackup}
+                onImport={async (file) => {
+                    const data = await importBackup(file);
+                    if (data) {
+                        toast.success('备份已导入，页面将刷新');
+                        setTimeout(() => window.location.reload(), 1000);
+                    }
+                }}
+                onCreateBackup={createBackup}
+                storageUsage={getStorageUsage()}
+            />
+
+            {/* AI 优化建议对话框 */}
+            <AssetAdviceDialog
+                open={advisorOpen}
+                onOpenChange={setAdvisorOpen}
+                advice={advice}
+                onAccept={handleAcceptAdvice}
+            />
+
+            {/* 🆕 提示词预览对话框 */}
+            <PromptPreviewDialog
+                open={!!promptPreview}
+                onOpenChange={(open) => !open && cancelPreview()}
+                originalPrompt={promptPreview?.originalPrompt || ''}
+                optimizedPrompt={promptPreview?.optimizedPrompt || ''}
+                negativePrompt={promptPreview?.negativePrompt}
+                platform="doubao"
+                onConfirm={confirmPreviewAndGenerate}
+                onCancel={cancelPreview}
+            />
+
+            {/* 🆕 批量生成进度对话框 */}
+            <BatchGenerationDialog
+                open={isBatchGenerating}
+                tasks={batchTasks}
+                currentIndex={batchProgress.current}
+                isPaused={batchPaused}
+                onPause={() => setBatchPaused(true)}
+                onResume={() => setBatchPaused(false)}
+                onCancel={() => setBatchCancelled(true)}
+                onClose={() => {
+                    // 批量生成完成后的清理逻辑已在 hook 中处理
+                }}
+            />
         </div>
     );
 }

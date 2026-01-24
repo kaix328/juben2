@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import type { StoryboardPanel, Project } from '../../../types';
+import { BlobImage } from '../../../components/LazyImage';
 
 interface StoryboardPrintTemplateProps {
     panels: StoryboardPanel[];
@@ -94,14 +95,19 @@ export const StoryboardPrintTemplate: React.FC<StoryboardPrintTemplateProps> = (
                                 <td>{panel.panelNumber || index + 1}</td>
                                 <td>
                                     {panel.generatedImage ? (
-                                        <img src={panel.generatedImage} alt={`分镜 ${panel.panelNumber}`} />
+                                        <BlobImage blobId={panel.generatedImage} alt={`分镜 ${panel.panelNumber}`} />
                                     ) : (
                                         <span style={{ color: '#999' }}>无图</span>
                                     )}
                                 </td>
                                 <td>{panel.shot}{panel.angle && ` / ${panel.angle}`}</td>
-                                <td>{panel.description || '-'}</td>
-                                <td style={{ fontStyle: 'italic' }}>{panel.dialogue || '-'}</td>
+                                <td>{(panel.description || '-').replace(/\\n/g, '\n')}</td>
+                                <td style={{ fontStyle: 'italic' }}>
+                                    {panel.dialogue
+                                        ? (typeof panel.dialogue === 'string' ? panel.dialogue : (panel.dialogue as any).text || JSON.stringify(panel.dialogue)).replace(/\\n/g, '\n')
+                                        : '-'
+                                    }
+                                </td>
                                 <td>{panel.duration ? `${panel.duration}秒` : '-'}</td>
                             </tr>
                         ))}
@@ -123,8 +129,8 @@ export const StoryboardPrintTemplate: React.FC<StoryboardPrintTemplateProps> = (
                                 <div key={panel.id} className="print-panel no-page-break">
                                     {/* 预览图 */}
                                     {panel.generatedImage ? (
-                                        <img
-                                            src={panel.generatedImage}
+                                        <BlobImage
+                                            blobId={panel.generatedImage}
                                             alt={`分镜 ${panel.panelNumber}`}
                                             className="print-panel-image"
                                         />
@@ -145,14 +151,14 @@ export const StoryboardPrintTemplate: React.FC<StoryboardPrintTemplateProps> = (
                                         {/* 画面描述 */}
                                         {panel.description && (
                                             <div className="print-panel-desc">
-                                                {panel.description}
+                                                {panel.description.replace(/\\n/g, '\n')}
                                             </div>
                                         )}
 
                                         {/* 对白 */}
                                         {panel.dialogue && (
                                             <div className="print-panel-dialogue">
-                                                "{panel.dialogue}"
+                                                "{(typeof panel.dialogue === 'string' ? panel.dialogue : (panel.dialogue as any).text || JSON.stringify(panel.dialogue)).replace(/\\n/g, '\n')}"
                                             </div>
                                         )}
 
@@ -172,7 +178,12 @@ export const StoryboardPrintTemplate: React.FC<StoryboardPrintTemplateProps> = (
                                         {(panel.environmentMotion || (panel.characterActions && panel.characterActions.length > 0)) && (
                                             <div className="print-panel-meta" style={{ fontSize: '9px', color: '#555' }}>
                                                 {panel.environmentMotion && `环境: ${panel.environmentMotion}`}
-                                                {panel.characterActions && panel.characterActions.length > 0 && ` | 动作: ${panel.characterActions.join(', ')}`}
+                                                {panel.characterActions && panel.characterActions.length > 0 && ` | 动作: ${Array.isArray(panel.characterActions)
+                                                        ? panel.characterActions.map(action =>
+                                                            typeof action === 'string' ? action : action.text || JSON.stringify(action)
+                                                        ).join(', ')
+                                                        : String(panel.characterActions)
+                                                    }`}
                                             </div>
                                         )}
 

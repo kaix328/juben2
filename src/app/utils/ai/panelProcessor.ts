@@ -2,13 +2,12 @@
  * 分镜后处理模块 - 智能填充音效、音乐、运镜等
  * 从 aiService.ts 拆分
  */
-import type { ScriptScene, StoryboardPanel } from '../../types';
+import type { ScriptScene } from '../../types';
 import {
     SOUND_PRESETS,
-    MUSIC_PRESETS,
-    EMOTIONAL_CAMERA_PRESETS,
-    CAMERA_SPEED_KEYWORDS
-} from '../promptGenerator';
+    MUSIC_PRESETS
+} from '../prompts';
+import { matchColorByMood } from '../prompts/colorGrading';
 
 /**
  * 智能后处理：自动填充音效、音乐、起始帧、结束帧（含上下文感知）
@@ -25,7 +24,26 @@ export function smartFillPanel(
     const beat = scene?.beat || '';
     const mood = (panel.atmosphere || panel.emotionalBeat || beat || '').toUpperCase();
 
-    // 0. 上下文感知：开始帧承接上一镜结束帧
+    // 🆕 0. 智能补充画面描述（如果为空或过短）
+    if (!panel.description || panel.description.length < 10) {
+        const shotCN = panel.shot || '中景';
+        const locationStr = scene?.location || '场景';
+        const timeOfDay = scene?.timeOfDay || '';
+        const characters = panel.characters || [];
+        const characterStr = characters.length > 0 ? characters.join('、') : '角色';
+        
+        // 根据是否有对白生成不同的描述
+        if (panel.dialogue) {
+            panel.description = `${shotCN}，${locationStr}${timeOfDay ? `，${timeOfDay}` : ''}。${characterStr}说话，表情变化`;
+        } else {
+            const action = scene?.action?.substring(0, 50) || '在场景中';
+            panel.description = `${shotCN}，${locationStr}${timeOfDay ? `，${timeOfDay}` : ''}。${characterStr}${action}`;
+        }
+        
+        console.log(`[智能填充] 分镜#${panel.panelNumber}: 画面描述为空，自动生成: ${panel.description}`);
+    }
+
+    // 0.1 上下文感知：开始帧承接上一镜结束帧
     if (prevPanel && prevPanel.endFrame && (!panel.startFrame || panel.startFrame === '')) {
         panel.startFrame = `承接上一镜：${prevPanel.endFrame}`;
     }
@@ -291,21 +309,10 @@ export function smartFillPanel(
         }
     }
 
-    // 11. 智能推断调色参考
+    // 11. 智能推断调色参考 (使用专业调色预设库)
     if (!panel.colorGrade) {
-        if (mood.includes('TENSE') || mood.includes('紧张')) {
-            panel.colorGrade = '冷调蓝绿，去饱和';
-        } else if (mood.includes('ROMANTIC') || mood.includes('浪漫')) {
-            panel.colorGrade = '暖调橙黄，柔化高光';
-        } else if (mood.includes('SAD') || mood.includes('悲伤')) {
-            panel.colorGrade = '低饱和蓝灰，压暗中间调';
-        } else if (mood.includes('ACTION') || mood.includes('热血')) {
-            panel.colorGrade = '高对比橙蓝色调';
-        } else if (location.includes('古') || location.includes('武侠')) {
-            panel.colorGrade = '复古暖黄，略微去饱和';
-        } else {
-            panel.colorGrade = '自然调色';
-        }
+        const timeOfDay = scene?.timeOfDay || '';
+        panel.colorGrade = matchColorByMood(mood, timeOfDay, location);
     }
 
     // 12. 智能推断机位标记

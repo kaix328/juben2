@@ -5,32 +5,59 @@
 import type { ScriptScene, Character, Scene, StoryboardPanel, DirectorStyle } from '../../types';
 import { generateId } from '../storage';
 import { callDeepSeek, parseJSON } from '../volcApi';
-import { generateStoryboardImagePrompt, generateStoryboardVideoPrompt } from '../promptGenerator';
-import { DENSITY_CONFIG, splitLongDialogue, type DensityMode } from '../../constants/densityConfig';
+import { generateStoryboardImagePrompt, generateStoryboardVideoPrompt } from '../prompts';
+import { DENSITY_CONFIG, type DensityMode } from '../../constants/densityConfig';
+import { smartSplitDialogue } from './smartDialogueSplitter';
 import { smartFillPanel } from './panelProcessor';
-import { devLog, callWithRetry, checkCharacterConsistency } from './utils';
+import { devLog, callWithRetry } from './utils';
+
+
+import type { ProgressCallback } from '../../types/extraction';
+import { createProgress } from '../../types/extraction';
+
+import { adjustPanelCount, calculateTargetRange } from './panelCountController';
+import { processScenesInBatches } from './batchProcessor';
+import { performQualityCheck } from './qualityChecker';
+import { enhancePanelsWithHybridAI } from './hybridEnhancer';
+import { validateAllPanels, getValidationSummary } from '../promptValidator';
 
 /**
- * 智能 Fallback 分镜生成
+ * 智能 Fallback 分镜生成（性能优化版）
  */
 export async function generateFallbackPanels(
     scenes: ScriptScene[],
     characters: Character[],
     assetsScenes: Scene[],
     densityMode: 'compact' | 'standard' | 'detailed',
-    directorStyle?: DirectorStyle
+    directorStyle?: DirectorStyle,
+    onProgress?: ProgressCallback
 ): Promise<StoryboardPanel[]> {
-    const allPanels: any[] = [];
+    // 报告准备阶段
+    onProgress?.(createProgress('preparing', 0, scenes.length, '正在准备 Fallback 分镜生成...'));
+
+    // 🚀 性能优化：预分配数组容量，减少动态扩容
+    const estimatedPanels = scenes.length * 4; // 每个场景平均4个分镜
+    const allPanels: any[] = new Array(estimatedPanels);
+    let panelIndex = 0;
     let panelNumber = 1;
 
-    scenes.forEach((scene) => {
+    const config = DENSITY_CONFIG[densityMode as DensityMode] || DENSITY_CONFIG.standard;
+
+    scenes.forEach((scene, sceneIndex) => {
+        // 报告处理进度
+        onProgress?.(createProgress(
+            'processing',
+            sceneIndex + 1,
+            scenes.length,
+            `正在生成场景 ${sceneIndex + 1}/${scenes.length} 的分镜...`
+        ));
         const dialogueCount = scene.dialogues?.length || 0;
         const actionLength = (scene.action || '').length;
 
         devLog(`[Fallback 场景${scene.sceneNumber}] ${dialogueCount}句对白, ${actionLength}字动作`);
 
         // 1. 建立镜头
-        allPanels.push({
+        allPanels[panelIndex++] = {
             id: generateId(),
             panelNumber: panelNumber++,
             sceneId: scene.id,
@@ -46,20 +73,18 @@ export async function generateFallbackPanels(
             notes: '建立场景',
             aiPrompt: '',
             aiVideoPrompt: ''
-        });
+        };
 
         // 2. 对话分镜
         if (scene.dialogues && scene.dialogues.length > 0) {
-            const config = DENSITY_CONFIG[densityMode as DensityMode] || DENSITY_CONFIG.standard;
-
             scene.dialogues.forEach((dialogue, idx) => {
                 const fullDialogue = dialogue.lines || '';
                 const character = dialogue.character;
-                const dialogueChunks = splitLongDialogue(fullDialogue, config.longDialogueThreshold);
+                const dialogueChunks = smartSplitDialogue(fullDialogue, config.longDialogueThreshold);
 
                 dialogueChunks.forEach((chunk, chunkIdx) => {
                     const isFirst = idx === 0 && chunkIdx === 0;
-                    allPanels.push({
+                    allPanels[panelIndex++] = {
                         id: generateId(),
                         panelNumber: panelNumber++,
                         sceneId: scene.id,
@@ -68,26 +93,25 @@ export async function generateFallbackPanels(
                         shot: isFirst ? '近景' : '特写',
                         angle: '平视',
                         cameraMovement: '静止',
-                        duration: Math.max(2, Math.ceil(chunk.length / 20)),
+                        duration: Math.max(2, Math.ceil(chunk.text.length / 20)),
                         characters: [character],
-                        dialogue: chunk,
+                        dialogue: chunk.text,
                         props: [],
                         notes: dialogueChunks.length > 1 ? `对话 ${idx + 1}-${chunkIdx + 1}` : `对话 ${idx + 1}`,
                         aiPrompt: '',
                         aiVideoPrompt: ''
-                    });
+                    };
                 });
             });
         }
 
         // 3. 动作分镜
-        const config = DENSITY_CONFIG[densityMode as DensityMode] || DENSITY_CONFIG.standard;
         if (actionLength > config.actionCharsPerPanel / 2) {
             const actionParts = Math.ceil(actionLength / config.actionCharsPerPanel);
             for (let i = 0; i < Math.min(actionParts, 3); i++) {
                 const actionText = (scene.action || '').substring(i * config.actionCharsPerPanel, (i + 1) * config.actionCharsPerPanel);
                 if (actionText.trim()) {
-                    allPanels.push({
+                    allPanels[panelIndex++] = {
                         id: generateId(),
                         panelNumber: panelNumber++,
                         sceneId: scene.id,
@@ -103,24 +127,48 @@ export async function generateFallbackPanels(
                         notes: '动作描写',
                         aiPrompt: '',
                         aiVideoPrompt: ''
-                    });
+                    };
                 }
             }
         }
     });
 
+    // 🚀 性能优化：截取实际使用的部分
+    const actualPanels = allPanels.slice(0, panelIndex);
+
     // 应用智能填充和生成提示词
-    const filledPanels = allPanels.map((panel, index) => {
-        const matchedScene = scenes.find(s => s.id === panel.sceneId);
-        const prevPanel = index > 0 ? allPanels[index - 1] : undefined;
-        const nextPanel = index < allPanels.length - 1 ? allPanels[index + 1] : undefined;
-        const filledPanel = smartFillPanel(panel, matchedScene, prevPanel, nextPanel, allPanels);
+    onProgress?.(createProgress('validating', 0, actualPanels.length, '正在生成 AI 提示词...'));
+
+    // 🚀 性能优化：构建场景查找 Map
+    const sceneMap = new Map<string, ScriptScene>();
+    scenes.forEach(scene => sceneMap.set(scene.id, scene));
+
+    const filledPanels = actualPanels.map((panel: StoryboardPanel, index: number) => {
+
+        const matchedScene = sceneMap.get(panel.sceneId);
+        const prevPanel = index > 0 ? actualPanels[index - 1] : undefined;
+        const nextPanel = index < actualPanels.length - 1 ? actualPanels[index + 1] : undefined;
+        const filledPanel = smartFillPanel(panel, matchedScene, prevPanel, nextPanel, actualPanels);
         filledPanel.aiPrompt = generateStoryboardImagePrompt(filledPanel as StoryboardPanel, characters, assetsScenes, directorStyle);
         filledPanel.aiVideoPrompt = generateStoryboardVideoPrompt(filledPanel as StoryboardPanel, characters, assetsScenes, directorStyle, prevPanel);
         return filledPanel;
     });
 
     devLog(`[智能Fallback] 共生成 ${filledPanels.length} 个分镜（${scenes.length} 个场景）`);
+
+    // 🆕 提示词质量验证
+    console.log('[Fallback Prompt Validation] 开始验证提示词质量...');
+    const validationResult = validateAllPanels(filledPanels, characters, assetsScenes);
+    console.log(`[Fallback Prompt Validation] 总体评分: ${validationResult.totalScore}/100`);
+    console.log(`[Fallback Prompt Validation] 有效: ${validationResult.validCount}, 需要优化: ${validationResult.invalidCount}`);
+    
+    if (validationResult.totalScore < 70) {
+        console.warn('[Fallback Prompt Validation] ⚠️ Fallback 提示词质量较低');
+    }
+
+    // 报告完成
+    onProgress?.(createProgress('complete', filledPanels.length, filledPanels.length, `成功生成 ${filledPanels.length} 个分镜`));
+
     return filledPanels;
 }
 
@@ -156,13 +204,75 @@ export async function extractStoryboard(
     characters: Character[] = [],
     assetsScenes: Scene[] = [],
     densityMode: 'compact' | 'standard' | 'detailed' = 'standard',
-    directorStyle?: DirectorStyle
+    directorStyle?: DirectorStyle,
+    onProgress?: ProgressCallback
 ): Promise<StoryboardPanel[]> {
-    // 场景数量限制检查
-    const MAX_SCENES_FOR_AI = 15;
+    // 报告准备阶段
+    onProgress?.(createProgress('preparing', 0, scenes.length, '正在准备场景数据...'));
+
+    // 🆕 场景数量限制检查 - 优化分块策略
+    const MAX_SCENES_FOR_AI = 50; // 最大场景数
+    const BATCH_SIZE = 3; // 🔧 减小批次大小到 3 个场景，避免单次请求超时（从5减少到3）
+
     if (scenes.length > MAX_SCENES_FOR_AI) {
         devLog(`[extractStoryboard] 场景数量 ${scenes.length} 超过限制 ${MAX_SCENES_FOR_AI}，直接使用智能 Fallback`);
-        return generateFallbackPanels(scenes, characters, assetsScenes, densityMode, directorStyle);
+        onProgress?.(createProgress('preparing', scenes.length, scenes.length, `场景数量过多（${scenes.length}个），使用智能 Fallback 模式...`));
+        return generateFallbackPanels(scenes, characters, assetsScenes, densityMode, directorStyle, onProgress);
+    }
+
+    // 🆕 如果场景数量 > 5，使用批量处理（降低阈值，更早启用分块）
+    if (scenes.length > BATCH_SIZE) {
+        devLog(`[extractStoryboard] 场景数量 ${scenes.length}，使用批量处理模式（每批 ${BATCH_SIZE} 个）`);
+        onProgress?.(createProgress('preparing', 0, scenes.length, `场景较多（${scenes.length}个），使用批量处理模式...`));
+
+        try {
+            const batchedPanels = await processScenesInBatches(
+                scenes,
+                characters,
+                assetsScenes,
+                densityMode,
+                directorStyle,
+                // Extract function callback
+                async (
+                    batchScenes,
+                    batchChars,
+                    batchAssets,
+                    batchDensity,
+                    batchStyle,
+                    batchProgress
+                ) => {
+                    return extractStoryboard(
+                        batchScenes,
+                        batchChars,
+                        batchAssets,
+                        batchDensity,
+                        batchStyle,
+                        batchProgress
+                    );
+                },
+                {
+                    batchSize: BATCH_SIZE,
+                    maxRetries: 2,
+                    continueOnError: true,
+                },
+                onProgress
+            );
+
+
+            // 重新编号
+            batchedPanels.forEach((panel, index) => {
+                panel.panelNumber = index + 1;
+            });
+
+            devLog(`[extractStoryboard] 批量处理完成，共生成 ${batchedPanels.length} 个分镜`);
+            onProgress?.(createProgress('complete', batchedPanels.length, batchedPanels.length, `批量处理完成，共 ${batchedPanels.length} 个分镜`));
+
+            return batchedPanels;
+        } catch (error) {
+            console.error('[extractStoryboard] 批量处理失败，使用 Fallback:', error);
+            onProgress?.(createProgress('processing', 0, 1, '批量处理失败，使用智能 Fallback...'));
+            return generateFallbackPanels(scenes, characters, assetsScenes, densityMode, directorStyle, onProgress);
+        }
     }
 
     // 构建场景数据
@@ -196,7 +306,9 @@ export async function extractStoryboard(
         estimatedTotal += config.basePerScene + Math.ceil(dialogueCount * config.panelsPerDialogue) + Math.ceil(actionLength / config.actionCharsPerPanel);
     });
 
-    const prompt = `你是专业分镜设计师兼音效设计师，将剧本场景逐帧转换为精确的漫画分镜。
+    onProgress?.(createProgress('preparing', scenes.length, scenes.length, `准备完成，预估生成 ${estimatedTotal} 个分镜...`));
+
+    const prompt = `你是专业分镜设计师兼音效设计师，将剧本场景逐帧转换为精确的电影级分镜。
 
 【⚠️ 核心约束 - 必须严格遵守】
 1. **预估分镜数量：约 ${estimatedTotal} 个**，请确保生成数量接近此目标
@@ -204,31 +316,71 @@ export async function extractStoryboard(
 3. **每个场景开头必须有建立镜头**（远景/全景）
 4. **长动作描写（>50字）必须拆分为多个动作镜头**
 
+【🧠 智能推理要求 - 提升画面质量】
+1. **情绪潜文本**：从对白和动作中推断角色的内心状态，并在description中体现（如"眼神中透露出不安"）
+2. **视觉隐喻**：根据剧情暗示使用象征性视觉元素（如"雨水模糊窗玻璃象征迷茫"、"逆光剪影强调孤独"）
+3. **空间叙事**：利用景别变化传达权力关系或情感距离（如"俯视角度暗示弱势"）
+4. **镜头节奏**：根据情绪高低调整时长和运镜（紧张时快切，深情时慢推）
+
 【密度要求】
 ${densityPrompt}
 
 【角色与环境参考】
 ${characterContext ? `角色描述：\n${characterContext}\n` : ''}
 ${sceneContext ? `环境描述：\n${sceneContext}\n` : ''}
-${directorStyle ? `导演风格：${directorStyle.artStyle || ''}, 氛围: ${directorStyle.mood || ''}\n` : ''}
+${directorStyle ? `导演风格:
+- 艺术风格: ${directorStyle.artStyle || '默认'}
+- 核心氛围: ${directorStyle.mood || '默认'}
+- 光照风格: ${directorStyle.lightingStyle || '默认'}
+- 镜头语言: ${directorStyle.cameraStyle || '默认'}
+- 视觉参考: ${directorStyle.customPrompt || ''}
+` : ''}
 
 【景别代码】ECU(大特写)/CU(特写)/MCU(近景)/MS(中景)/MWS(中全景)/WS(远景)/EWS(大远景)/POV(主观)/OTS(过肩)
 【角度代码】EYE_LEVEL(平视)/HIGH(俯视)/LOW(仰视)/DUTCH(倾斜)
 【运动代码】STATIC(静止)/PAN_L(左摇)/PAN_R(右摇)/DOLLY_IN(推)/DOLLY_OUT(拉)/TRACK_L(左移)/TRACK_R(右移)/FOLLOW(跟随)
 
-【JSON 格式】
-[{"sceneId":"场景ID","description":"画面描述（含光影）","shotSize":"MS","angle":"EYE_LEVEL","movementType":"STATIC","duration":3,"characters":["角色名"],"dialogue":"完整对白（如有）","soundEffects":["具体音效"],"music":"背景音乐","startFrame":"起始帧画面","endFrame":"结束帧画面","composition":"构图方式","shotIntent":"镜头意图","axisNote":"轴线备注","environmentMotion":"环境动态","characterActions":["角色名:动作"]}]
+【JSON 格式 - 每个字段都必须填写】
+[{
+    "sceneId":"场景ID",
+    "description":"🔴 必填！详细的画面描述（至少30字），必须包含：1)场景位置和时间 2)角色及其动作/表情 3)光影氛围 4)视觉细节。示例：'中景，办公室，日。张三站在窗前凝视远方，阳光透过百叶窗在地板上投下斑驳光影，营造出孤独沉思的氛围'",
+    "shotSize":"MS",
+    "angle":"EYE_LEVEL",
+    "movementType":"STATIC",
+    "duration":3,
+    "characters":["角色名"],
+    "dialogue":"完整对白（如有）",
+    "soundEffects":["具体音效"],
+    "music":"背景音乐",
+    "startFrame":"起始帧画面",
+    "endFrame":"结束帧画面",
+    "composition":"构图方式",
+    "shotIntent":"镜头意图",
+    "axisNote":"轴线备注",
+    "environmentMotion":"环境动态",
+    "characterActions":["角色名:动作"],
+    "emotionalSubtext":"潜在情绪"
+}]
+
+⚠️ 特别注意：description 字段是最重要的字段，必须详细描述画面内容，不能为空或过于简短！
 
 【剧本场景】
 ${JSON.stringify(scenesData)}
 `;
 
     try {
+        // 报告 AI 提取阶段
+        onProgress?.(createProgress('extracting', 0, 1, '正在调用 AI 生成分镜（预计需要 3-8 分钟，请耐心等待）...'));
+
+        // 🚀 性能优化：减少重试次数和延迟
         const result = await callWithRetry(
             () => callDeepSeek([{ role: 'user', content: prompt }]),
-            3,
-            1000
+            2,  // 从 3 次减少到 2 次
+            500 // 从 1000ms 减少到 500ms
         );
+
+        onProgress?.(createProgress('extracting', 1, 1, 'AI 响应完成，正在解析数据...'));
+
         let shots = parseJSON(result);
 
         if (!shots) shots = [];
@@ -241,22 +393,50 @@ ${JSON.stringify(scenesData)}
 
         if (shots.length === 0) {
             console.warn('extractStoryboard: no shots extracted, using smart fallback');
-            return generateFallbackPanels(scenes, characters, assetsScenes, densityMode, directorStyle);
+            onProgress?.(createProgress('processing', 0, 1, 'AI 未返回分镜，使用智能 Fallback...'));
+            return generateFallbackPanels(scenes, characters, assetsScenes, densityMode, directorStyle, onProgress);
         }
+
+        // 报告处理阶段
+        onProgress?.(createProgress('processing', 0, shots.length, '正在处理分镜数据...'));
+
+        // 🚀 性能优化：预先构建场景查找 Map，避免重复 find
+        const sceneMap = new Map<string, ScriptScene>();
+        scenes.forEach(scene => sceneMap.set(scene.id, scene));
 
         // 映射回 StoryboardPanel 结构
         const allPanels = shots.map((shot: any, index: number) => {
-            const matchedScene = scenes.find(s => s.id === shot.sceneId) || scenes[Math.floor(index / 3)];
+            const matchedScene = sceneMap.get(shot.sceneId) || scenes[Math.floor(index / 3)];
             const rawShotSize = shot.shotSize || shot.shot || 'MS';
             const rawAngle = shot.angle || 'EYE_LEVEL';
             const rawMovement = shot.movementType || shot.cameraMovement || 'STATIC';
+
+            // 🆕 智能生成 description（如果 AI 返回为空或过短）
+            let description = shot.description || '';
+            if (!description || description.length < 10) {
+                const shotCN = SHOT_CODE_TO_CN[rawShotSize] || '中景';
+                const location = matchedScene?.location || '场景';
+                const timeOfDay = matchedScene?.timeOfDay || '';
+                const characters = shot.characters || matchedScene?.characters || [];
+                const characterStr = characters.length > 0 ? characters.join('、') : '角色';
+                
+                // 根据是否有对白生成不同的描述
+                if (shot.dialogue) {
+                    description = `${shotCN}，${location}${timeOfDay ? `，${timeOfDay}` : ''}。${characterStr}说话，表情变化`;
+                } else {
+                    const action = matchedScene?.action?.substring(0, 50) || '在场景中';
+                    description = `${shotCN}，${location}${timeOfDay ? `，${timeOfDay}` : ''}。${characterStr}${action}`;
+                }
+                
+                console.log(`[AI描述补充] 分镜#${index + 1}: AI返回描述为空，自动生成: ${description}`);
+            }
 
             return {
                 id: generateId(),
                 panelNumber: index + 1,
                 sceneId: matchedScene?.id || generateId(),
                 episodeNumber: matchedScene?.episodeNumber || 1,
-                description: shot.description || '',
+                description: description,
                 dialogue: shot.dialogue || '',
                 shot: SHOT_CODE_TO_CN[rawShotSize] || '中景',
                 angle: ANGLE_CODE_TO_CN[rawAngle] || '平视',
@@ -286,18 +466,45 @@ ${JSON.stringify(scenesData)}
         });
 
         // 应用智能填充
-        const processedPanels = allPanels.map((panelData: any, index: number) => {
+        onProgress?.(createProgress('processing', shots.length, shots.length, '正在应用智能填充和生成提示词...'));
+
+        // 🚀 性能优化：预先构建角色和场景 Map
+        const characterMap = new Map<string, Character>();
+        characters.forEach(char => characterMap.set(char.name, char));
+
+        // 1. 基础智能填充（规则引擎）
+        let filledPanels = allPanels.map((panelData: any, index: number) => {
             const matchedScene = panelData._matchedScene;
             delete panelData._matchedScene;
 
             const prevPanel = index > 0 ? allPanels[index - 1] : undefined;
             const nextPanel = index < allPanels.length - 1 ? allPanels[index + 1] : undefined;
 
-            const filledPanel = smartFillPanel(panelData, matchedScene, prevPanel, nextPanel, allPanels);
-            const imagePrompt = generateStoryboardImagePrompt(filledPanel as StoryboardPanel, characters, assetsScenes, directorStyle);
-            const videoPrompt = generateStoryboardVideoPrompt(filledPanel as StoryboardPanel, characters, assetsScenes, directorStyle, prevPanel);
+            return smartFillPanel(panelData, matchedScene, prevPanel, nextPanel, allPanels);
+        });
 
-            const unknownChars = checkCharacterConsistency(filledPanel.characters || [], characters);
+        // 2. 混合智能增强（AI Fallback）
+        onProgress?.(createProgress('processing', 0, filledPanels.length, '正在进行混合智能增强检查...'));
+        try {
+            filledPanels = await enhancePanelsWithHybridAI(filledPanels, onProgress);
+        } catch (err) {
+            console.error('[extractStoryboard] 混合增强失败，跳过:', err);
+        }
+
+        // 3. 生成最终提示词和校验
+        const processedPanels = filledPanels.map((filledPanel: StoryboardPanel, index: number) => {
+            const prevPanel = index > 0 ? filledPanels[index - 1] : undefined;
+            const imagePrompt = generateStoryboardImagePrompt(filledPanel, characters, assetsScenes, directorStyle);
+            const videoPrompt = generateStoryboardVideoPrompt(filledPanel, characters, assetsScenes, directorStyle, prevPanel);
+
+            // 🚀 性能优化：使用 Map 查找角色，避免重复遍历
+            const unknownChars: string[] = [];
+            for (const charName of filledPanel.characters || []) {
+                if (!characterMap.has(charName)) {
+                    unknownChars.push(charName);
+                }
+            }
+
             if (unknownChars.length > 0) {
                 console.warn(`[分镜${index + 1}] ⚠️ 未知角色: ${unknownChars.join(', ')}`);
                 filledPanel.notes = `${filledPanel.notes || ''} [警告: 未知角色 ${unknownChars.join(', ')}]`.trim();
@@ -309,14 +516,41 @@ ${JSON.stringify(scenesData)}
             return filledPanel;
         });
 
+        // 🆕 数量控制：调整到目标范围
+        const targetRange = calculateTargetRange(estimatedTotal);
+        console.log(`[extractStoryboard] AI 生成 ${processedPanels.length} 个分镜，目标范围: ${targetRange.min}-${targetRange.max}`);
+
+        let adjustedPanels = processedPanels;
+        if (processedPanels.length < targetRange.min || processedPanels.length > targetRange.max) {
+            onProgress?.(createProgress('processing', 0, 1, `正在调整分镜数量（${processedPanels.length} → ${targetRange.min}-${targetRange.max}）...`));
+            adjustedPanels = adjustPanelCount(processedPanels, targetRange.min, targetRange.max);
+            console.log(`[extractStoryboard] ✅ 数量调整完成: ${processedPanels.length} → ${adjustedPanels.length}`);
+
+            // 重新生成调整后分镜的提示词
+            // 重新生成调整后分镜的提示词
+            adjustedPanels = adjustedPanels.map((panel: StoryboardPanel, index: number) => {
+                const prevPanel = index > 0 ? adjustedPanels[index - 1] : undefined;
+
+                return {
+                    ...panel,
+                    aiPrompt: generateStoryboardImagePrompt(panel, characters, assetsScenes, directorStyle),
+                    aiVideoPrompt: generateStoryboardVideoPrompt(panel, characters, assetsScenes, directorStyle, prevPanel)
+                };
+            });
+        }
+
         // 场景覆盖验证
-        const coveredSceneIds = new Set(processedPanels.map((p: any) => p.sceneId));
+        onProgress?.(createProgress('validating', 0, scenes.length, '正在验证场景覆盖...'));
+
+        // 🚀 性能优化：使用 Set 进行快速查找
+        const coveredSceneIds = new Set(adjustedPanels.map((p: any) => p.sceneId));
         const missingScenes = scenes.filter(s => !coveredSceneIds.has(s.id));
 
         if (missingScenes.length > 0) {
             console.warn(`[extractStoryboard] ⚠️ AI 遗漏了 ${missingScenes.length} 个场景，使用 Fallback 补充`);
+            onProgress?.(createProgress('validating', 0, missingScenes.length, `正在补充 ${missingScenes.length} 个遗漏场景...`));
 
-            let panelNumber = processedPanels.length + 1;
+            let panelNumber = adjustedPanels.length + 1;
             const configForFallback = DENSITY_CONFIG[densityMode as DensityMode] || DENSITY_CONFIG.standard;
 
             missingScenes.forEach(scene => {
@@ -344,10 +578,10 @@ ${JSON.stringify(scenesData)}
                     shotIntent: '建立空间'
                 };
 
-                const filledEstablishing = smartFillPanel(establishingPanel, scene, undefined, undefined, processedPanels);
+                const filledEstablishing = smartFillPanel(establishingPanel, scene, undefined, undefined, adjustedPanels);
                 filledEstablishing.aiPrompt = generateStoryboardImagePrompt(filledEstablishing as StoryboardPanel, characters, assetsScenes, directorStyle);
                 filledEstablishing.aiVideoPrompt = generateStoryboardVideoPrompt(filledEstablishing as StoryboardPanel, characters, assetsScenes, directorStyle, undefined);
-                processedPanels.push(filledEstablishing);
+                adjustedPanels.push(filledEstablishing);
 
                 // 对话分镜
                 if (scene.dialogues && scene.dialogues.length > 0) {
@@ -376,10 +610,10 @@ ${JSON.stringify(scenesData)}
                             shotIntent: '展示情绪'
                         };
 
-                        const filledDialogue = smartFillPanel(dialoguePanel, scene, undefined, undefined, processedPanels);
+                        const filledDialogue = smartFillPanel(dialoguePanel, scene, undefined, undefined, adjustedPanels);
                         filledDialogue.aiPrompt = generateStoryboardImagePrompt(filledDialogue as StoryboardPanel, characters, assetsScenes, directorStyle);
                         filledDialogue.aiVideoPrompt = generateStoryboardVideoPrompt(filledDialogue as StoryboardPanel, characters, assetsScenes, directorStyle, undefined);
-                        processedPanels.push(filledDialogue);
+                        adjustedPanels.push(filledDialogue);
                     });
                 }
 
@@ -412,21 +646,63 @@ ${JSON.stringify(scenesData)}
                                 endFrame: ''
                             };
 
-                            const filledAction = smartFillPanel(actionPanel, scene, undefined, undefined, processedPanels);
+                            const filledAction = smartFillPanel(actionPanel, scene, undefined, undefined, adjustedPanels);
                             filledAction.aiPrompt = generateStoryboardImagePrompt(filledAction as StoryboardPanel, characters, assetsScenes, directorStyle);
                             filledAction.aiVideoPrompt = generateStoryboardVideoPrompt(filledAction as StoryboardPanel, characters, assetsScenes, directorStyle, undefined);
-                            processedPanels.push(filledAction);
+                            adjustedPanels.push(filledAction);
                         }
                     }
                 }
             });
 
-            console.log(`[extractStoryboard] ✅ 场景覆盖补充完成，共 ${processedPanels.length} 个分镜`);
+            console.log(`[extractStoryboard] ✅ 场景覆盖补充完成，共 ${adjustedPanels.length} 个分镜`);
+            onProgress?.(createProgress('validating', missingScenes.length, missingScenes.length, `场景补充完成，共 ${adjustedPanels.length} 个分镜`));
         }
 
-        return processedPanels;
+        // 报告完成
+        onProgress?.(createProgress('complete', adjustedPanels.length, adjustedPanels.length, `成功生成 ${adjustedPanels.length} 个分镜`));
+
+        // 🆕 质量检查
+        onProgress?.(createProgress('validating', 0, 1, '正在进行质量检查...'));
+        const qualityReport = performQualityCheck(adjustedPanels);
+
+        console.log(`[Quality Check] 质量分数: ${qualityReport.summary.qualityScore}/100`);
+        console.log(`[Quality Check] 错误: ${qualityReport.summary.errorCount}, 警告: ${qualityReport.summary.warningCount}, 提示: ${qualityReport.summary.infoCount}`);
+
+        // 如果有严重错误，在控制台显示
+        if (qualityReport.errors.length > 0) {
+            console.warn('[Quality Check] 发现严重问题:');
+            qualityReport.errors.forEach(error => {
+                console.warn(`  - 分镜 ${error.panelNumber}: ${error.message}`);
+            });
+        }
+
+        // 可以将质量报告附加到面板数据中（供UI使用）
+        // 注意：这里我们将报告记录到控制台，UI集成将在后续完成
+        onProgress?.(createProgress('complete', adjustedPanels.length, adjustedPanels.length,
+            `成功生成 ${adjustedPanels.length} 个分镜（质量分数: ${qualityReport.summary.qualityScore}）`));
+
+        // 🆕 提示词质量验证
+        console.log('[Prompt Validation] 开始验证提示词质量...');
+        const validationResult = validateAllPanels(adjustedPanels, characters, assetsScenes);
+        console.log(`[Prompt Validation] 总体评分: ${validationResult.totalScore}/100`);
+        console.log(`[Prompt Validation] 有效: ${validationResult.validCount}, 需要优化: ${validationResult.invalidCount}`);
+        console.log(`[Prompt Validation] 问题统计: 错误 ${validationResult.summary.errorCount}, 警告 ${validationResult.summary.warningCount}, 提示 ${validationResult.summary.infoCount}`);
+        
+        // 如果提示词质量较低，给出警告
+        if (validationResult.totalScore < 60) {
+            console.warn('[Prompt Validation] ⚠️ 提示词质量较低，建议检查和优化');
+            console.warn(getValidationSummary(validationResult));
+        } else if (validationResult.totalScore < 80) {
+            console.log('[Prompt Validation] ℹ️ 提示词质量良好，但仍有优化空间');
+        } else {
+            console.log('[Prompt Validation] ✅ 提示词质量优秀');
+        }
+
+        return adjustedPanels;
     } catch (error) {
         console.error('DeepSeek extractStoryboard failed:', error);
-        throw new Error('AI 分镜生成失败');
+        onProgress?.(createProgress('processing', 0, 1, 'AI 提取失败，使用智能 Fallback...'));
+        return generateFallbackPanels(scenes, characters, assetsScenes, densityMode, directorStyle, onProgress);
     }
 }

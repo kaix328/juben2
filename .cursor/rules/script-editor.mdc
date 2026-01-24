@@ -1,0 +1,141 @@
+# 剧本编辑模块 Skills
+
+## 模块概述
+剧本编辑模块负责将原文转换为专业电影剧本格式，支持AI智能提取和手动编辑。
+
+## 核心文件
+- `src/app/pages/ScriptEditor/index.tsx` - 剧本编辑器主组件
+- `src/app/pages/ScriptEditor/hooks/useScriptData.ts` - 数据管理Hook
+- `src/app/pages/ScriptEditor/hooks/useScriptStats.ts` - 统计计算Hook
+- `src/app/pages/ScriptEditor/hooks/useKeyboardShortcuts.ts` - 快捷键Hook
+- `src/app/pages/ScriptEditor/components/` - 子组件目录
+- `src/app/types/script.ts` - 剧本类型定义
+
+## 功能实现
+
+### 1. AI剧本提取
+```typescript
+// 位置: hooks/useScriptData.ts
+// 功能：从原文自动提取场景、对白、动作描述
+// 调用: handleAIExtract()
+// 进度显示: extractProgress 状态
+```
+
+### 2. 场景管理
+```typescript
+// 场景数据结构
+interface ScriptScene {
+  id: string;
+  sceneNumber: number;
+  episodeNumber?: number;  // 集数
+  sceneType: string;       // INT/EXT
+  location: string;        // 场景地点
+  timeOfDay: string;       // 时间
+  action: string;          // 动作描述
+  characters: string[];    // 出场角色
+  dialogues: Dialogue[];   // 对白列表
+  transition?: string;     // 转场
+}
+```
+
+### 3. 对白管理
+```typescript
+interface Dialogue {
+  id: string;
+  character: string;       // 角色名
+  parenthetical?: string;  // 括号说明
+  lines: string;           // 台词内容
+}
+```
+
+### 4. 批量编辑
+```typescript
+// 位置: components/BatchEditPanel.tsx
+// 功能：
+// - 批量选择场景
+// - 批量修改场景属性
+// - 批量删除场景
+```
+
+### 5. 全局查找替换
+```typescript
+// 位置: index.tsx - handleGlobalReplace
+// 功能：
+// - 替换角色名
+// - 替换对白中的角色
+// - 替换动作描述中的文本
+```
+
+### 6. 五元素分析
+```typescript
+// 位置: components/StoryFiveElementsAnalyzer.tsx
+// 功能：
+// - 分析故事主题
+// - 分析角色关系
+// - 分析情节结构
+// - 生成分析报告
+```
+
+## 组件结构
+
+```
+ScriptEditor/
+├── index.tsx              # 主组件
+├── types.ts               # 本地类型定义
+├── components/
+│   ├── SceneCard.tsx      # 场景卡片
+│   ├── DialogueItem.tsx   # 对白项
+│   ├── BatchEditPanel.tsx # 批量编辑面板
+│   ├── StatsPanel.tsx     # 统计面板
+│   ├── EpisodeFilter.tsx  # 集数筛选器
+│   ├── CharacterStats.tsx # 角色统计
+│   ├── PageCounter.tsx    # 页数计数器
+│   └── ExtractProgressIndicator.tsx # 提取进度
+└── hooks/
+    ├── useScriptData.ts   # 数据管理
+    ├── useScriptStats.ts  # 统计计算
+    └── useKeyboardShortcuts.ts # 快捷键
+```
+
+## 快捷键支持
+
+| 快捷键 | 功能 |
+|--------|------|
+| `Ctrl+S` | 保存剧本 |
+| `Ctrl+Z` | 撤销 |
+| `Ctrl+Y` | 重做 |
+| `Ctrl+N` | 添加场景 |
+| `Ctrl+B` | 切换批量模式 |
+| `Ctrl+I` | 切换统计面板 |
+
+## 视图模式
+
+1. **编辑模式**: 可编辑场景和对白
+2. **预览模式**: 专业剧本格式预览
+
+## 导出功能
+
+- 导出为 Markdown 格式
+- 导出为纯文本格式
+
+## 统计功能
+
+- 总场景数
+- 总对白数
+- 预估时长
+- 各集时长
+- 角色对白统计
+
+## 开发规范
+
+1. **撤销/重做**: 使用历史栈实现
+2. **自动保存**: 编辑后自动保存，显示保存时间
+3. **集数筛选**: 支持按集数筛选场景
+4. **场景编号**: 自动维护场景编号顺序
+
+## 注意事项
+
+- 场景卡片支持拖拽排序
+- 对白支持内联编辑
+- 批量模式下显示选择复选框
+- 统计面板可折叠

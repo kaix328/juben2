@@ -6,9 +6,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 import type { DirectorStyle, StyleApplicationSettings, StoryboardPanel, Storyboard } from '../../types';
-import { useProjectStore } from '../../store/useProjectStore';
+import { useProjectStore } from '../../stores';
 import { chapterStorage, storyboardStorage } from '../storage';
-import { optimizePrompt } from '../volcApi';
 import { styleSettingsStorage } from '../localStorage';
 
 // 默认风格应用设置
@@ -146,6 +145,96 @@ export function useDirectorStyle(projectId?: string) {
         }
     }, [currentProject, style, updateProject, safeToast, projectId]);
 
+    const [customPresets, setCustomPresets] = useState<any[]>([]);
+    const [previewImage, setPreviewImage] = useState<string | null>(null);
+    const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
+
+    // 加载自定义预设
+    useEffect(() => {
+        import('../directorStylePresets').then(({ directorStylePresets, DEFAULT_MASTER_PRESET }) => {
+            const customs = directorStylePresets.getAll();
+            // 注入内置大师预设
+            const masterPreset = {
+                id: 'builtin-master-01',
+                name: '🎬 大师级电影质感 (Master Cinematic)',
+                style: DEFAULT_MASTER_PRESET,
+                createdAt: new Date().toISOString(),
+            };
+            setCustomPresets([masterPreset, ...customs]);
+        });
+    }, []);
+
+    // 保存自定义预设
+    const saveCustomPreset = useCallback(async (name: string) => {
+        const { directorStylePresets } = await import('../directorStylePresets');
+        const newPreset = directorStylePresets.save(name, style);
+        setCustomPresets(prev => [newPreset, ...prev]);
+        safeToast(`已保存预设: ${name}`);
+    }, [style, safeToast]);
+
+    // 删除自定义预设
+    const deleteCustomPreset = useCallback(async (id: string) => {
+        const { directorStylePresets } = await import('../directorStylePresets');
+        directorStylePresets.delete(id);
+        setCustomPresets(prev => prev.filter(p => p.id !== id));
+        safeToast('预设已删除');
+    }, [safeToast]);
+
+    // 生成预览图
+    const generatePreview = useCallback(async () => {
+        if (!isMountedRef.current) return;
+        setIsGeneratingPreview(true);
+        setPreviewImage(null);
+
+        try {
+            // 动态导入 aiService 以避免循环依赖
+            const { aiService } = await import('../../services/aiService');
+            // 引入 PromptEngine
+            const { PromptEngine } = await import('../promptEngine');
+
+            // 使用 PromptEngine 生成预览提示词，确保与实际应用一致
+            const engine = new PromptEngine(style, {
+                useProfessionalSkills: true,
+                includeNegative: true,
+                qualityTags: 'professional'
+            });
+
+            // 创建一个通用的"测试场景"，旨在展示光影和构图
+            // 使用一个相对中性的场景，让风格参数主导画面
+            const previewScene = {
+                id: 'preview-scene',
+                name: 'Visual Style Preview',
+                description: 'A representative scene showcasing the lighting, color grades, and composition style. A character standing in an atmospheric environment.',
+                environment: 'atmospheric background',
+                timeOfDay: 'dusk' as const, // 默认黄昏，容易出效果
+                location: 'Generic Location', // 补全缺失字段
+                image: '', // 补全缺失字段
+                atmosphere: '' // 补全缺失字段
+            };
+
+            const resultPrompt = engine.forSceneWide(previewScene);
+            const optimizedPrompt = resultPrompt.positive;
+
+            const result = await aiService.image.generate({
+                prompt: optimizedPrompt,
+                negativePrompt: style.negativePrompt, // 显式传递负面提示词
+                width: 2560,
+                height: 1440,
+            });
+
+            if (isMountedRef.current && result.success && result.data) {
+                setPreviewImage(result.data);
+            }
+        } catch (error) {
+            console.error('Failed to generate preview', error);
+            safeToast('生成预览失败，请稍后重试', 'error');
+        } finally {
+            if (isMountedRef.current) {
+                setIsGeneratingPreview(false);
+            }
+        }
+    }, [style, safeToast]);
+
     return {
         style,
         setStyle,
@@ -157,6 +246,13 @@ export function useDirectorStyle(projectId?: string) {
         safeUpdateStyleSettings,
         resetStyle,
         handleSave,
+        // New Features
+        customPresets,
+        saveCustomPreset,
+        deleteCustomPreset,
+        previewImage,
+        isGeneratingPreview,
+        generatePreview
     };
 }
 
@@ -214,15 +310,33 @@ export function useStyleBatchApply(
 
             toast.loading(`正在更新 ${totalPanels} 个分镜的提示词...`, { id: toastId });
 
+            // 加载资产库以用于上下文增强
+            const { assetStorage } = await import('../storage');
+            const assets = await assetStorage.getByProjectId(projectId);
+            const characters = assets?.characters || [];
+            const scenes = assets?.scenes || [];
+
+            // 引入 PromptEngine
+            const { PromptEngine } = await import('../promptEngine');
+            const engine = new PromptEngine(style, {
+                useProfessionalSkills: true,
+                includeNegative: false
+            });
+
             for (const storyboard of storyboards) {
                 const updatedPanels = await Promise.all(
                     storyboard.panels.map(async (panel: StoryboardPanel) => {
+                        // 🔒 如果已锁定，跳过更新
+                        if (panel.isLocked) {
+                            processedPanels++;
+                            return panel;
+                        }
+
                         try {
-                            const newPrompt = await optimizePrompt(
-                                panel.description || '',
-                                style,
-                                'storyboard'
-                            );
+                            // v2.0: 使用 PromptEngine 生成提示词
+                            const result = engine.forStoryboardImage(panel, characters, scenes);
+                            const newPrompt = result.positive;
+
                             processedPanels++;
                             toast.loading(`已处理 ${processedPanels}/${totalPanels} 个分镜...`, { id: toastId });
 

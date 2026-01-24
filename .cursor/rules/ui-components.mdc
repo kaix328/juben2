@@ -1,0 +1,261 @@
+# UI组件库 Skills
+
+## 模块概述
+项目使用 shadcn/ui 组件库，基于 Radix UI 和 Tailwind CSS 构建。
+
+## 核心文件
+- `src/app/components/ui/` - UI组件目录
+- `src/styles/` - 全局样式
+- `tailwind.config.js` - Tailwind配置
+- `src/app/utils/classnames.ts` - 类名工具
+
+## 组件列表
+
+### 基础组件
+```
+ui/
+├── button.tsx        # 按钮
+├── input.tsx         # 输入框
+├── textarea.tsx      # 文本域
+├── label.tsx         # 标签
+├── badge.tsx         # 徽章
+├── skeleton.tsx      # 骨架屏
+├── separator.tsx     # 分隔线
+├── progress.tsx      # 进度条
+└── scroll-area.tsx   # 滚动区域
+```
+
+### 布局组件
+```
+ui/
+├── card.tsx          # 卡片
+├── tabs.tsx          # 标签页
+├── accordion.tsx     # 手风琴
+└── breadcrumb.tsx    # 面包屑
+```
+
+### 交互组件
+```
+ui/
+├── dialog.tsx        # 对话框
+├── dropdown-menu.tsx # 下拉菜单
+├── select.tsx        # 选择器
+├── checkbox.tsx      # 复选框
+├── switch.tsx        # 开关
+├── slider.tsx        # 滑块
+└── tooltip.tsx       # 工具提示
+```
+
+### 自定义组件
+```
+components/
+├── empty-state.tsx   # 空状态
+├── ErrorBoundary.tsx # 错误边界
+├── LazyImage.tsx     # 懒加载图片
+└── ProjectSidebar.tsx # 项目侧边栏
+```
+
+## 使用示例
+
+### Button
+```tsx
+import { Button } from '@/components/ui/button';
+
+<Button variant="default">默认按钮</Button>
+<Button variant="outline">边框按钮</Button>
+<Button variant="ghost">幽灵按钮</Button>
+<Button variant="destructive">危险按钮</Button>
+<Button size="sm">小按钮</Button>
+<Button size="lg">大按钮</Button>
+<Button disabled>禁用按钮</Button>
+```
+
+### Dialog
+```tsx
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+
+<Dialog open={isOpen} onOpenChange={setIsOpen}>
+  <DialogTrigger asChild>
+    <Button>打开对话框</Button>
+  </DialogTrigger>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle>标题</DialogTitle>
+      <DialogDescription>描述文字</DialogDescription>
+    </DialogHeader>
+    {/* 内容 */}
+    <DialogFooter>
+      <Button onClick={() => setIsOpen(false)}>关闭</Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
+```
+
+### Card
+```tsx
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+
+<Card>
+  <CardHeader>
+    <CardTitle>卡片标题</CardTitle>
+  </CardHeader>
+  <CardContent>
+    卡片内容
+  </CardContent>
+  <CardFooter>
+    卡片底部
+  </CardFooter>
+</Card>
+```
+
+### Tabs
+```tsx
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
+<Tabs defaultValue="tab1">
+  <TabsList>
+    <TabsTrigger value="tab1">标签1</TabsTrigger>
+    <TabsTrigger value="tab2">标签2</TabsTrigger>
+  </TabsList>
+  <TabsContent value="tab1">内容1</TabsContent>
+  <TabsContent value="tab2">内容2</TabsContent>
+</Tabs>
+```
+
+### Select
+```tsx
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+<Select value={value} onValueChange={setValue}>
+  <SelectTrigger>
+    <SelectValue placeholder="请选择" />
+  </SelectTrigger>
+  <SelectContent>
+    <SelectItem value="option1">选项1</SelectItem>
+    <SelectItem value="option2">选项2</SelectItem>
+  </SelectContent>
+</Select>
+```
+
+## 类名工具
+
+```typescript
+// 位置: utils/classnames.ts
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+
+// 使用示例
+<div className={cn(
+  'base-class',
+  isActive && 'active-class',
+  variant === 'primary' ? 'primary-class' : 'secondary-class'
+)} />
+```
+
+## Toast 通知
+
+```typescript
+import { toast } from 'sonner';
+
+toast.success('操作成功');
+toast.error('操作失败');
+toast.warning('警告信息');
+toast.info('提示信息');
+toast.loading('加载中...');
+
+// 带操作的toast
+toast('消息', {
+  action: {
+    label: '撤销',
+    onClick: () => handleUndo()
+  }
+});
+```
+
+## 图标库
+
+```typescript
+// 使用 Lucide React 图标
+import { 
+  Plus, Trash2, Edit, Save, 
+  FileText, Film, Layers, 
+  Sparkles, Settings, Search 
+} from 'lucide-react';
+
+<Plus className="w-4 h-4" />
+<Trash2 className="w-5 h-5 text-red-500" />
+```
+
+## 样式规范
+
+### 颜色系统
+```css
+/* 主题色 */
+--primary: 紫色渐变 (purple-600 to pink-600)
+--secondary: 灰色系
+--destructive: 红色系
+--muted: 浅灰色
+
+/* 状态色 */
+--success: green-500
+--warning: yellow-500
+--error: red-500
+--info: blue-500
+```
+
+### 间距规范
+```css
+/* 常用间距 */
+gap-2: 8px
+gap-3: 12px
+gap-4: 16px
+gap-6: 24px
+
+/* 内边距 */
+p-4: 16px
+p-6: 24px
+px-6 py-4: 水平24px 垂直16px
+```
+
+### 圆角规范
+```css
+rounded-md: 6px
+rounded-lg: 8px
+rounded-xl: 12px
+rounded-2xl: 16px
+rounded-full: 完全圆角
+```
+
+## 动画效果
+
+```css
+/* 已禁用按钮点击动画 */
+/* 使用 transition-colors 实现颜色过渡 */
+/* 使用 hover:scale-105 实现悬停放大 */
+```
+
+## 开发规范
+
+1. **组件导入**: 从 `@/components/ui/` 导入
+2. **类名合并**: 使用 `cn()` 函数
+3. **图标大小**: 统一使用 `w-4 h-4` 或 `w-5 h-5`
+4. **间距一致**: 遵循 4px 基准网格
+
+## 注意事项
+
+- 所有按钮已禁用点击动画
+- 对话框使用 Portal 渲染
+- 下拉菜单支持键盘导航
+- 组件支持 `asChild` 属性自定义渲染

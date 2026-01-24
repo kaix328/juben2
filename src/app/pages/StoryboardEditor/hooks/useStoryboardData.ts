@@ -1,90 +1,88 @@
-import { useState, useEffect, useCallback } from 'react';
-import { scriptStorage, storyboardStorage, projectStorage, assetStorage, chapterStorage } from '../../../utils/storage';
+import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useStoryboard, useSaveStoryboard } from '../../../hooks/queries/useStoryboard';
+import { useScript } from '../../../hooks/queries/useScript';
+import { useProjectByChapter } from '../../../hooks/queries/useProject';
+import { useAssetsByChapter, useSaveAssets } from '../../../hooks/queries/useAssets';
 import { extractStoryboard } from '../../../utils/aiService';
 import type { Script, Storyboard, Project, AssetLibrary, StoryboardPanel } from '../../../types';
+import type { ExtractProgress } from '../../../types/extraction';
 import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../../../../lib/queryClient';
 
 interface UseStoryboardDataProps {
     chapterId: string | undefined;
 }
 
 export function useStoryboardData({ chapterId }: UseStoryboardDataProps) {
-    const [script, setScript] = useState<Script | null>(null);
-    const [storyboard, setStoryboard] = useState<Storyboard | null>(null);
-    const [project, setProject] = useState<Project | null>(null);
-    const [assets, setAssets] = useState<AssetLibrary | null>(null);
+    const queryClient = useQueryClient();
+    
+    // 使用 React Query hooks 获取数据
+    const { data: storyboardData, isLoading: isLoadingStoryboard } = useStoryboard(chapterId);
+    const { data: scriptData, isLoading: isLoadingScript } = useScript(chapterId);
+    const { data: projectData, isLoading: isLoadingProject } = useProjectByChapter(chapterId);
+    const { data: assetsData, isLoading: isLoadingAssets } = useAssetsByChapter(chapterId);
+    
+    // Mutations
+    const saveStoryboardMutation = useSaveStoryboard();
+    const saveAssetsMutation = useSaveAssets();
+    
+    // 数据迁移逻辑：处理 script 数据
+    const script = useMemo(() => {
+        if (!scriptData) return null;
+        const migratedScenes = scriptData.scenes.map(scene => ({
+            ...scene,
+            sceneType: scene.sceneType || 'INT' as const,
+            dialogues: scene.dialogues || [],
+            episodeNumber: scene.episodeNumber || 1,
+        }));
+        return { ...scriptData, scenes: migratedScenes };
+    }, [scriptData]);
+    
+    const storyboard = storyboardData || null;
+    const project = projectData || null;
+    const assets = assetsData || null;
+    
+    // styleLastUpdated 基于 project 的 directorStyle
     const [styleLastUpdated, setStyleLastUpdated] = useState<number>(0);
-
-    // 加载数据
-    const loadData = useCallback(async () => {
-        if (!chapterId) return;
-
-        try {
-            const scriptData = await scriptStorage.getByChapterId(chapterId);
-            if (scriptData) {
-                // 数据迁移逻辑
-                const migratedScenes = scriptData.scenes.map(scene => ({
-                    ...scene,
-                    sceneType: scene.sceneType || 'INT' as const,
-                    dialogues: scene.dialogues || [],
-                    episodeNumber: scene.episodeNumber || 1,
-                }));
-                setScript({ ...scriptData, scenes: migratedScenes });
-            }
-
-            const storyboardData = await storyboardStorage.getByChapterId(chapterId);
-            setStoryboard(storyboardData || null);
-
-            const actualProjId = await chapterStorage.getProjectIdByChapterId(chapterId);
-
-            if (actualProjId) {
-                const projectData = await projectStorage.getById(actualProjId);
-                setProject(projectData || null);
-
-                const assetData = await assetStorage.getByProjectId(actualProjId);
-                setAssets(assetData || null);
-
-                if (projectData?.directorStyle) {
-                    setStyleLastUpdated(Date.now());
-                }
-            }
-        } catch (error) {
-            console.error('Failed to load storyboard data:', error);
-            toast.error('数据加载失败');
-        }
-    }, [chapterId]);
-
     useEffect(() => {
-        loadData();
-    }, [loadData]);
-
-    // 数据迁移逻辑并更新状态
+        if (project?.directorStyle) {
+            setStyleLastUpdated(Date.now());
+        }
+    }, [project?.directorStyle]);
+    
+    // 保存 storyboard - 使用 React Query mutation
     const handleSave = useCallback(async (updatedStoryboard: Storyboard) => {
         try {
-            await storyboardStorage.save(updatedStoryboard);
-            setStoryboard(updatedStoryboard);
-            toast.success('分镜已保存');  // 🆕 保存成功反馈
+            await saveStoryboardMutation.mutateAsync(updatedStoryboard);
             return true;
         } catch (error) {
             console.error('Failed to save storyboard:', error);
-            toast.error('保存失败');
             return false;
         }
-    }, []);
-
-    // 🆕 保存资产库（用于反向同步）
+    }, [saveStoryboardMutation]);
+    
+    // 保存资产库 - 使用 React Query mutation
     const handleUpdateAssets = useCallback(async (updatedAssets: AssetLibrary) => {
         try {
-            await assetStorage.save(updatedAssets);
-            setAssets(updatedAssets);
+            await saveAssetsMutation.mutateAsync(updatedAssets);
             return true;
         } catch (error) {
             console.error('Failed to save assets:', error);
-            toast.error('保存资产失败');
             return false;
         }
-    }, []);
-
+    }, [saveAssetsMutation]);
+    
+    // setStoryboard - 用于乐观更新本地状态（在保存之前）
+    const setStoryboard = useCallback((newStoryboard: Storyboard | null) => {
+        if (newStoryboard && chapterId) {
+            queryClient.setQueryData(
+                queryKeys.storyboard.byChapter(chapterId),
+                newStoryboard
+            );
+        }
+    }, [chapterId, queryClient]);
+    
     // 增删改查
     const handleUpdatePanel = useCallback(async (panelId: string, updates: Partial<StoryboardPanel>) => {
         if (!storyboard) return;
@@ -274,7 +272,8 @@ export function useStoryboardData({ chapterId }: UseStoryboardDataProps) {
         episodeNumber: number | 'all',
         densityMode: 'compact' | 'standard' | 'detailed',
         onStart: () => void,
-        onEnd: () => void
+        onEnd: () => void,
+        onProgress?: (progress: ExtractProgress) => void
     ) => {
         if (!script || !chapterId) return;
 
@@ -290,7 +289,8 @@ export function useStoryboardData({ chapterId }: UseStoryboardDataProps) {
                 assets?.characters || [],
                 assets?.scenes || [],
                 densityMode,
-                project?.directorStyle
+                project?.directorStyle,
+                onProgress
             );
 
             if (panelResults) {
@@ -329,26 +329,51 @@ export function useStoryboardData({ chapterId }: UseStoryboardDataProps) {
                 };
 
                 await handleSave(finalStoryboard);
-                toast.success(episodeNumber === 'all' ? '全集分镜提取成功' : `第 ${episodeNumber} 集分镜提取成功`);
+                toast.success(episodeNumber === 'all' ? '全集分镜提取成功' : `第 ${episodeNumber} 集分镜提取成功`, {
+                    description: `共生成 ${renumbered.length} 个分镜`
+                });
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('AI Extraction failed:', error);
-            toast.error('分镜提取失败');
+            const errorMessage = error?.message || '分镜提取失败';
+            const errorLines = errorMessage.split('\n');
+            toast.error(errorLines[0], {
+                description: errorLines[1] || '请稍后重试',
+                duration: 5000
+            });
         } finally {
             onEnd();
         }
     }, [script, chapterId, project, assets, storyboard, handleSave]);
 
+    // 刷新数据 - 使 React Query 缓存失效
+    const refreshData = useCallback(() => {
+        if (chapterId) {
+            queryClient.invalidateQueries({
+                queryKey: queryKeys.storyboard.byChapter(chapterId),
+            });
+            queryClient.invalidateQueries({
+                queryKey: queryKeys.script.byChapter(chapterId),
+            });
+            queryClient.invalidateQueries({
+                queryKey: ['project', 'byChapter', chapterId],
+            });
+            queryClient.invalidateQueries({
+                queryKey: ['assets', 'byChapter', chapterId],
+            });
+        }
+    }, [chapterId, queryClient]);
+
     return {
         script,
-        setScript,
+        setScript: () => {}, // 不再需要手动设置，由 React Query 管理
         storyboard,
         setStoryboard,
         project,
         assets,
         styleLastUpdated,
         handleSave,
-        handleUpdateAssets,  // 🆕 保存资产库
+        handleUpdateAssets,
         handleAIExtractByEpisode,
         handleAddPanel,
         handleApplyTemplate,
@@ -357,16 +382,9 @@ export function useStoryboardData({ chapterId }: UseStoryboardDataProps) {
         movePanel,
         versions,
         loadVersions,
-        handleSaveVersion,   // 🆕 保存版本
+        handleSaveVersion,
         handleRestoreVersion,
         handleDeleteVersion,
-        refreshData: loadData,
+        refreshData,
     };
-}
-
-// 辅助方法（如果 storage.ts 没暴露的话）
-async function getProjectIdByChapterId(chapterId: string) {
-    const { chapterStorage } = await import('../../../utils/storage');
-    const chapter = await chapterStorage.getById(chapterId);
-    return chapter?.projectId;
 }

@@ -1,10 +1,12 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import {
     Map as MapIcon, ArrowLeft, X, Tag, Trash2,
     Sparkles, Image as ImageIcon, Search, Plus, Edit, Copy, RotateCw
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PromptEngine } from '../../utils/promptEngine';
+import { enhanceSceneDescription } from '../../utils/descriptionEnhancer';
+import { ClickableImage } from '../ImagePreviewDialog';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -111,6 +113,53 @@ export function SceneTab({
         const handleCopy = (text: string) => {
             navigator.clipboard.writeText(text);
             toast.success('已复制到剪切板');
+        };
+
+        // 🆕 AI智能生成提示词（带描述增强）
+        const handleAIGenerate = (type: 'wide' | 'medium' | 'closeup') => {
+            // 1. 检查描述
+            if (!scene.description && !scene.environment) {
+                toast.error('请先填写场景描述或环境氛围');
+                return;
+            }
+            
+            // 2. 检查导演风格（可选）
+            if (!project?.directorStyle) {
+                toast.warning('未设定导演风格，将使用默认风格生成');
+            }
+            
+            // 3. 🆕 智能增强描述
+            const enhancedDescription = enhanceSceneDescription(
+                scene.description || '',
+                scene.location || '',
+                scene.environment || '',
+                scene.timeOfDay,
+                scene.weather
+            );
+            
+            // 创建增强后的场景对象
+            const enhancedScene = {
+                ...scene,
+                description: enhancedDescription,
+            };
+            
+            // 4. 生成提示词
+            const engine = new PromptEngine(project?.directorStyle);
+            let result;
+            
+            if (type === 'wide') {
+                result = engine.forSceneWide(enhancedScene);
+                handleUpdateScene(scene.id, { widePrompt: result.positive });
+                toast.success('✨ 远景提示词已生成！已智能延展描述');
+            } else if (type === 'medium') {
+                result = engine.forSceneMedium(enhancedScene);
+                handleUpdateScene(scene.id, { mediumPrompt: result.positive });
+                toast.success('✨ 中景提示词已生成！已智能延展描述');
+            } else {
+                result = engine.forSceneCloseup(enhancedScene);
+                handleUpdateScene(scene.id, { closeupPrompt: result.positive });
+                toast.success('✨ 特写提示词已生成！已智能延展描述');
+            }
         };
 
         const handleOptimize = (type: 'wide' | 'medium' | 'closeup') => {
@@ -265,11 +314,19 @@ export function SceneTab({
                                 <div className="grid grid-cols-3 gap-4">
                                     <div className="space-y-2">
                                         <Label className="text-[10px] sm:text-xs text-center block">全景</Label>
-                                        <div className="aspect-video bg-gray-50 rounded border border-dashed border-green-300 overflow-hidden flex items-center justify-center">
-                                            {scene.widePreview ? (
-                                                <img src={scene.widePreview} className="w-full h-full object-cover" />
-                                            ) : <ImageIcon className="w-6 h-6 text-green-200" />}
-                                        </div>
+                                        {scene.widePreview ? (
+                                            <ClickableImage
+                                                src={scene.widePreview}
+                                                alt={`${scene.name} - 全景`}
+                                                className="w-full h-full object-cover"
+                                                containerClassName="aspect-video bg-gray-50 rounded border border-dashed border-green-300 overflow-hidden"
+                                                immediate
+                                            />
+                                        ) : (
+                                            <div className="aspect-video bg-gray-50 rounded border border-dashed border-green-300 overflow-hidden flex items-center justify-center">
+                                                <ImageIcon className="w-6 h-6 text-green-200" />
+                                            </div>
+                                        )}
                                         <Button
                                             variant="outline"
                                             size="sm"
@@ -283,11 +340,19 @@ export function SceneTab({
                                     </div>
                                     <div className="space-y-2">
                                         <Label className="text-[10px] sm:text-xs text-center block">中景</Label>
-                                        <div className="aspect-video bg-gray-50 rounded border border-dashed border-green-300 overflow-hidden flex items-center justify-center">
-                                            {scene.mediumPreview ? (
-                                                <img src={scene.mediumPreview} className="w-full h-full object-cover" />
-                                            ) : <ImageIcon className="w-6 h-6 text-green-200" />}
-                                        </div>
+                                        {scene.mediumPreview ? (
+                                            <ClickableImage
+                                                src={scene.mediumPreview}
+                                                alt={`${scene.name} - 中景`}
+                                                className="w-full h-full object-cover"
+                                                containerClassName="aspect-video bg-gray-50 rounded border border-dashed border-green-300 overflow-hidden"
+                                                immediate
+                                            />
+                                        ) : (
+                                            <div className="aspect-video bg-gray-50 rounded border border-dashed border-green-300 overflow-hidden flex items-center justify-center">
+                                                <ImageIcon className="w-6 h-6 text-green-200" />
+                                            </div>
+                                        )}
                                         <Button
                                             variant="outline"
                                             size="sm"
@@ -301,11 +366,19 @@ export function SceneTab({
                                     </div>
                                     <div className="space-y-2">
                                         <Label className="text-[10px] sm:text-xs text-center block">特写</Label>
-                                        <div className="aspect-video bg-gray-50 rounded border border-dashed border-green-300 overflow-hidden flex items-center justify-center">
-                                            {scene.closeupPreview ? (
-                                                <img src={scene.closeupPreview} className="w-full h-full object-cover" />
-                                            ) : <ImageIcon className="w-6 h-6 text-green-200" />}
-                                        </div>
+                                        {scene.closeupPreview ? (
+                                            <ClickableImage
+                                                src={scene.closeupPreview}
+                                                alt={`${scene.name} - 特写`}
+                                                className="w-full h-full object-cover"
+                                                containerClassName="aspect-video bg-gray-50 rounded border border-dashed border-green-300 overflow-hidden"
+                                                immediate
+                                            />
+                                        ) : (
+                                            <div className="aspect-video bg-gray-50 rounded border border-dashed border-green-300 overflow-hidden flex items-center justify-center">
+                                                <ImageIcon className="w-6 h-6 text-green-200" />
+                                            </div>
+                                        )}
                                         <Button
                                             variant="outline"
                                             size="sm"
@@ -327,8 +400,19 @@ export function SceneTab({
                                                 <Button
                                                     variant="ghost"
                                                     size="sm"
+                                                    className="h-6 px-2 text-[10px] text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                                                    onClick={() => handleAIGenerate('wide')}
+                                                    title="基于场景描述生成全新提示词"
+                                                >
+                                                    <Sparkles className="w-3 h-3 mr-1" />
+                                                    AI生成
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
                                                     className="h-6 px-2 text-[10px] text-green-600 hover:text-green-700 hover:bg-green-50"
                                                     onClick={() => handleOptimize('wide')}
+                                                    title="优化现有提示词"
                                                 >
                                                     <RotateCw className="w-3 h-3 mr-1" />
                                                     智能优化
@@ -358,8 +442,19 @@ export function SceneTab({
                                                 <Button
                                                     variant="ghost"
                                                     size="sm"
+                                                    className="h-6 px-2 text-[10px] text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                                                    onClick={() => handleAIGenerate('medium')}
+                                                    title="基于场景描述生成全新提示词"
+                                                >
+                                                    <Sparkles className="w-3 h-3 mr-1" />
+                                                    AI生成
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
                                                     className="h-6 px-2 text-[10px] text-green-600 hover:text-green-700 hover:bg-green-50"
                                                     onClick={() => handleOptimize('medium')}
+                                                    title="优化现有提示词"
                                                 >
                                                     <RotateCw className="w-3 h-3 mr-1" />
                                                     智能优化
@@ -389,8 +484,19 @@ export function SceneTab({
                                                 <Button
                                                     variant="ghost"
                                                     size="sm"
+                                                    className="h-6 px-2 text-[10px] text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                                                    onClick={() => handleAIGenerate('closeup')}
+                                                    title="基于场景描述生成全新提示词"
+                                                >
+                                                    <Sparkles className="w-3 h-3 mr-1" />
+                                                    AI生成
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
                                                     className="h-6 px-2 text-[10px] text-green-600 hover:text-green-700 hover:bg-green-50"
                                                     onClick={() => handleOptimize('closeup')}
+                                                    title="优化现有提示词"
                                                 >
                                                     <RotateCw className="w-3 h-3 mr-1" />
                                                     智能优化
@@ -424,7 +530,7 @@ export function SceneTab({
 
     return (
         <>
-            <div className="flex gap-2 mb-6">
+            <div className="flex gap-2 mb-4">
                 <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <Input
@@ -462,16 +568,17 @@ export function SceneTab({
                             <div className="border-2 border-gray-200 rounded-lg overflow-hidden hover:border-green-400 transition-all hover:shadow-lg bg-white">
                                 <div className="aspect-video bg-gradient-to-br from-green-100 to-blue-100 flex items-center justify-center overflow-hidden relative">
                                     {scene.widePreview ? (
-                                        <img
+                                        <ClickableImage
                                             src={scene.widePreview}
                                             alt={scene.name}
                                             className="w-full h-full object-cover"
+                                            containerClassName="w-full h-full"
                                         />
                                     ) : (
                                         <MapIcon className="w-12 h-12 text-gray-300" />
                                     )}
-                                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all flex items-center justify-center">
-                                        <Edit className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
+                                        <Edit className="w-6 h-6 text-white" />
                                     </div>
                                 </div>
 
@@ -543,16 +650,17 @@ export function SceneTab({
                                                 <div className="border-2 border-gray-200 rounded-lg overflow-hidden hover:border-green-400 transition-all hover:shadow-lg bg-white">
                                                     <div className="aspect-video bg-gradient-to-br from-green-100 to-blue-100 flex items-center justify-center overflow-hidden relative">
                                                         {scene.widePreview ? (
-                                                            <img
+                                                            <ClickableImage
                                                                 src={scene.widePreview}
                                                                 alt={scene.name}
                                                                 className="w-full h-full object-cover"
+                                                                containerClassName="w-full h-full"
                                                             />
                                                         ) : (
                                                             <MapIcon className="w-12 h-12 text-gray-300" />
                                                         )}
-                                                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all flex items-center justify-center">
-                                                            <Edit className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
+                                                            <Edit className="w-6 h-6 text-white" />
                                                         </div>
                                                     </div>
 

@@ -15,6 +15,49 @@ export interface ProjectStats {
     completionRate: number; // 完成度（0-100）
 }
 
+// 分镜分析详尽统计
+export interface StoryboardAnalytics {
+    // 基础统计
+    totalPanels: number;
+    totalScenes: number;
+    totalDuration: number;
+    totalCharacters: number;
+
+    // 进度统计
+    completedPanels: number;
+    panelsWithImages: number;
+    panelsWithDialogue: number;
+    completionRate: number;
+
+    // 分布统计
+    shotDistribution: Record<string, number>;
+    angleDistribution: Record<string, number>;
+    cameraMovementDistribution: Record<string, number>;
+    durationDistribution: { short: number; medium: number; long: number };
+    sceneDistribution: Record<string, number>;
+
+    // 对白分析
+    dialogueStats: {
+        hasDialogue: number;
+        silent: number;
+        dialogueRatio: number;
+    };
+
+    // 质量指标
+    averageDuration: number;
+    durationVariance: number;
+    rhythmScore: number;
+    diversityScore: number;
+}
+
+// 分析建议
+export interface AnalysisSuggestion {
+    type: 'info' | 'warning' | 'success';
+    category: string;
+    message: string;
+    action?: string;
+}
+
 // 项目类型定义
 export interface Project {
     id: string;

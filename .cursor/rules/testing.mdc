@@ -1,0 +1,212 @@
+# 测试规范 Skills
+
+## 模块概述
+项目使用 Vitest 作为测试框架，支持单元测试和组件测试。
+
+## 核心文件
+- `vitest.config.ts` - Vitest 配置
+- `src/__tests__/setup.ts` - 测试环境设置
+- `src/__tests__/*.spec.ts` - 测试文件
+
+## 配置文件
+
+```typescript
+// vitest.config.ts
+import { defineConfig } from 'vitest/config';
+import react from '@vitejs/plugin-react';
+import path from 'path';
+
+export default defineConfig({
+  plugins: [react()],
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: ['./src/__tests__/setup.ts'],
+    include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+      exclude: ['node_modules/', 'src/__tests__/'],
+    },
+  },
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src/app'),
+    },
+  },
+});
+```
+
+## 测试环境设置
+
+```typescript
+// src/__tests__/setup.ts
+import '@testing-library/jest-dom';
+
+// Mock IndexedDB
+const indexedDB = {
+  open: vi.fn(),
+  deleteDatabase: vi.fn(),
+};
+vi.stubGlobal('indexedDB', indexedDB);
+
+// Mock localStorage
+const localStorageMock = {
+  getItem: vi.fn(),
+  setItem: vi.fn(),
+  removeItem: vi.fn(),
+  clear: vi.fn(),
+};
+vi.stubGlobal('localStorage', localStorageMock);
+```
+
+## 测试示例
+
+### 存储层测试
+```typescript
+// src/__tests__/storage.spec.ts
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { generateId } from '../app/utils/storage';
+
+describe('Storage Utils', () => {
+  describe('generateId', () => {
+    it('should generate unique IDs', () => {
+      const id1 = generateId();
+      const id2 = generateId();
+      expect(id1).not.toBe(id2);
+    });
+
+    it('should include timestamp', () => {
+      const id = generateId();
+      const timestamp = id.split('-')[0];
+      expect(Number(timestamp)).toBeGreaterThan(0);
+    });
+  });
+});
+```
+
+### 工具函数测试
+```typescript
+// src/__tests__/utils.spec.ts
+import { describe, it, expect } from 'vitest';
+import { cn } from '../app/utils/classnames';
+
+describe('cn utility', () => {
+  it('should merge class names', () => {
+    expect(cn('foo', 'bar')).toBe('foo bar');
+  });
+
+  it('should handle conditional classes', () => {
+    expect(cn('foo', false && 'bar', 'baz')).toBe('foo baz');
+  });
+
+  it('should merge Tailwind classes correctly', () => {
+    expect(cn('px-2', 'px-4')).toBe('px-4');
+  });
+});
+```
+
+### 组件测试
+```typescript
+// src/__tests__/Button.spec.tsx
+import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { Button } from '../app/components/ui/button';
+
+describe('Button', () => {
+  it('should render correctly', () => {
+    render(<Button>Click me</Button>);
+    expect(screen.getByRole('button')).toHaveTextContent('Click me');
+  });
+
+  it('should handle click events', async () => {
+    const handleClick = vi.fn();
+    render(<Button onClick={handleClick}>Click me</Button>);
+    
+    await userEvent.click(screen.getByRole('button'));
+    expect(handleClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('should be disabled when disabled prop is true', () => {
+    render(<Button disabled>Click me</Button>);
+    expect(screen.getByRole('button')).toBeDisabled();
+  });
+});
+```
+
+## 运行测试
+
+```bash
+# 运行所有测试
+npm test
+
+# 监听模式
+npm run test:watch
+
+# 生成覆盖率报告
+npm run test:coverage
+
+# 运行特定测试文件
+npm test -- storage.spec.ts
+```
+
+## Mock 技巧
+
+### Mock 模块
+```typescript
+vi.mock('../app/utils/storage', () => ({
+  projectStorage: {
+    getAll: vi.fn().mockResolvedValue([]),
+    getById: vi.fn().mockResolvedValue(undefined),
+    save: vi.fn().mockResolvedValue(undefined),
+    delete: vi.fn().mockResolvedValue(undefined),
+  },
+  generateId: vi.fn().mockReturnValue('test-id'),
+}));
+```
+
+### Mock API 调用
+```typescript
+vi.mock('../app/utils/ai', () => ({
+  extractScript: vi.fn().mockResolvedValue({
+    id: 'script-1',
+    scenes: [],
+  }),
+}));
+```
+
+### Mock React Router
+```typescript
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return {
+    ...actual,
+    useParams: () => ({ projectId: 'test-project' }),
+    useNavigate: () => vi.fn(),
+  };
+});
+```
+
+## 测试覆盖目标
+
+| 模块 | 目标覆盖率 |
+|------|-----------|
+| 工具函数 | 90%+ |
+| 存储层 | 80%+ |
+| Hooks | 70%+ |
+| 组件 | 60%+ |
+
+## 开发规范
+
+1. **文件命名**: `*.spec.ts` 或 `*.test.ts`
+2. **测试结构**: 使用 `describe` 分组，`it` 描述用例
+3. **断言**: 使用 `expect` + Jest DOM matchers
+4. **Mock**: 在 `beforeEach` 中重置 mock
+
+## 注意事项
+
+- IndexedDB 需要 mock
+- 异步操作使用 `async/await`
+- 组件测试使用 `@testing-library/react`
+- 避免测试实现细节，关注行为

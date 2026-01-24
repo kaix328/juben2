@@ -1,0 +1,217 @@
+# 数据存储模块 Skills
+
+## 模块概述
+数据存储模块使用 IndexedDB (Dexie.js) 实现本地数据持久化，支持响应式查询。
+
+## 核心文件
+- `src/app/db/db.ts` - 数据库定义
+- `src/app/utils/storage.ts` - 存储层API
+- `src/app/store/useConfigStore.ts` - 配置状态管理
+
+## 数据库结构
+
+```typescript
+// 位置: src/app/db/db.ts
+class AppDatabase extends Dexie {
+  projects!: Table<Project>;
+  chapters!: Table<Chapter>;
+  scripts!: Table<Script>;
+  storyboards!: Table<Storyboard>;
+  assets!: Table<AssetLibrary>;
+  templates!: Table<StoryboardTemplate>;
+  versions!: Table<ProjectVersion>;
+  relations!: Table<CharacterRelation>;
+
+  constructor() {
+    super('AIComicStudioDB');
+    this.version(1).stores({
+      projects: 'id',
+      chapters: 'id, projectId',
+      scripts: 'id, chapterId',
+      storyboards: 'id, chapterId',
+      assets: 'projectId',
+      templates: 'id',
+      versions: 'id, projectId',
+      relations: 'id, projectId'
+    });
+  }
+}
+```
+
+## 存储层API
+
+### projectStorage
+```typescript
+const projectStorage = {
+  getAll(): Promise<Project[]>;
+  getById(id: string): Promise<Project | undefined>;
+  save(project: Project): Promise<void>;
+  delete(id: string): Promise<void>;  // 级联删除
+};
+```
+
+### chapterStorage
+```typescript
+const chapterStorage = {
+  getAll(): Promise<Chapter[]>;
+  getByProjectId(projectId: string): Promise<Chapter[]>;
+  getById(id: string): Promise<Chapter | undefined>;
+  getProjectIdByChapterId(chapterId: string): Promise<string | undefined>;
+  save(chapter: Chapter): Promise<void>;
+  delete(id: string): Promise<void>;
+};
+```
+
+### scriptStorage
+```typescript
+const scriptStorage = {
+  getByChapterId(chapterId: string): Promise<Script | undefined>;
+  save(script: Script): Promise<void>;
+};
+```
+
+### storyboardStorage
+```typescript
+const storyboardStorage = {
+  getByChapterId(chapterId: string): Promise<Storyboard | undefined>;
+  save(storyboard: Storyboard): Promise<void>;
+};
+```
+
+### assetStorage
+```typescript
+const assetStorage = {
+  getByProjectId(projectId: string): Promise<AssetLibrary | undefined>;
+  save(asset: AssetLibrary): Promise<void>;
+  initForProject(projectId: string): Promise<AssetLibrary>;
+};
+```
+
+### templateStorage
+```typescript
+const templateStorage = {
+  getAll(): Promise<StoryboardTemplate[]>;
+  getById(id: string): Promise<StoryboardTemplate | undefined>;
+  save(template: StoryboardTemplate): Promise<void>;
+  delete(id: string): Promise<void>;
+};
+```
+
+### versionStorage
+```typescript
+const versionStorage = {
+  getAll(): Promise<ProjectVersion[]>;
+  getById(id: string): Promise<ProjectVersion | undefined>;
+  save(version: ProjectVersion): Promise<void>;
+  delete(id: string): Promise<void>;
+};
+```
+
+## 响应式查询
+
+```typescript
+// 使用 useLiveQuery 实现数据实时更新
+import { useLiveQuery } from 'dexie-react-hooks';
+
+// 示例：监听项目列表变化
+const projects = useLiveQuery(() => projectStorage.getAll());
+
+// 示例：监听特定项目的章节
+const chapters = useLiveQuery(
+  () => projectId ? chapterStorage.getByProjectId(projectId) : [],
+  [projectId]
+);
+```
+
+## 状态管理 (Zustand)
+
+```typescript
+// 位置: store/useConfigStore.ts
+interface ConfigStore {
+  apiSettings: ApiSettings;
+  setApiSettings: (settings: ApiSettings) => void;
+}
+
+const useConfigStore = create<ConfigStore>()(
+  persist(
+    (set) => ({
+      apiSettings: {
+        volcApiKey: '',
+        llmEndpointId: '',
+        imageEndpointId: '',
+      },
+      setApiSettings: (settings) => set({ apiSettings: settings }),
+    }),
+    { name: 'config-storage' }
+  )
+);
+```
+
+## ID生成
+
+```typescript
+// 位置: utils/storage.ts
+export function generateId(): string {
+  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+// 示例输出: "1705472400000-abc123xyz"
+```
+
+## 级联删除
+
+```typescript
+// 删除项目时的级联删除逻辑
+async function deleteProject(id: string) {
+  await db.transaction('rw', 
+    [db.projects, db.chapters, db.scripts, db.storyboards, db.assets, db.versions, db.relations],
+    async () => {
+      // 1. 获取所有章节
+      const chapters = await db.chapters.where('projectId').equals(id).toArray();
+      
+      // 2. 删除每个章节的剧本和分镜
+      for (const chapter of chapters) {
+        await db.scripts.where('chapterId').equals(chapter.id).delete();
+        await db.storyboards.where('chapterId').equals(chapter.id).delete();
+        await db.chapters.delete(chapter.id);
+      }
+      
+      // 3. 删除项目资源库
+      await db.assets.delete(id);
+      
+      // 4. 删除版本历史
+      await db.versions.where('projectId').equals(id).delete();
+      
+      // 5. 删除角色关系
+      await db.relations.where('projectId').equals(id).delete();
+      
+      // 6. 删除项目
+      await db.projects.delete(id);
+    }
+  );
+}
+```
+
+## 数据迁移
+
+```typescript
+// 版本升级时的数据迁移
+this.version(2).stores({
+  // 新增字段或表
+}).upgrade(tx => {
+  // 迁移逻辑
+});
+```
+
+## 开发规范
+
+1. **事务处理**: 多表操作使用 `db.transaction()`
+2. **索引设计**: 常用查询字段建立索引
+3. **ID格式**: 使用时间戳+随机字符串
+4. **时间格式**: ISO 8601 字符串
+
+## 注意事项
+
+- IndexedDB 是异步的，所有操作返回 Promise
+- 使用 `useLiveQuery` 实现数据响应式
+- 大数据量时考虑分页查询
+- 图片数据使用 Base64 存储

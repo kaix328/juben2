@@ -1,0 +1,150 @@
+# AI漫剧全流程制作平台 - 项目规则
+
+## 项目概述
+
+这是一个基于 React + TypeScript + Vite 构建的 AI 漫剧全流程制作平台，支持从原文到分镜的完整创作流程。
+
+## 技术栈
+
+- **框架**: React 18 + TypeScript
+- **构建工具**: Vite
+- **路由**: React Router v6
+- **状态管理**: Zustand (配置) + Dexie React Hooks (数据)
+- **数据库**: IndexedDB (Dexie.js)
+- **UI组件**: shadcn/ui + Radix UI
+- **样式**: Tailwind CSS
+- **图标**: Lucide React
+- **通知**: Sonner
+- **AI服务**: 火山引擎 (DeepSeek LLM + Doubao 图像生成)
+
+## 项目结构
+
+```
+src/
+├── app/
+│   ├── components/       # 通用组件
+│   │   ├── ui/          # shadcn/ui 组件
+│   │   ├── storyboard/  # 分镜相关组件
+│   │   └── asset-library/ # 项目库组件
+│   ├── pages/           # 页面组件
+│   │   ├── ChapterEditor/   # 章节原文编辑
+│   │   ├── ScriptEditor/    # 剧本编辑
+│   │   ├── StoryboardEditor/ # 分镜制作
+│   │   └── AssetLibrary/    # 项目库
+│   ├── types/           # TypeScript 类型定义
+│   ├── utils/           # 工具函数
+│   │   ├── ai/         # AI 服务模块
+│   │   ├── prompts/    # 提示词生成
+│   │   └── hooks/      # 自定义 Hooks
+│   ├── db/             # 数据库定义
+│   ├── store/          # Zustand 状态管理
+│   └── constants/      # 常量定义
+├── styles/             # 全局样式
+└── __tests__/          # 单元测试
+```
+
+## 核心功能模块
+
+### 1. 项目管理
+- 创建/删除项目
+- 章节管理
+- 项目统计
+
+### 2. 章节原文编辑
+- 原文输入/编辑
+- AI智能分析（识别角色、场景、道具）
+- 一键添加到项目库
+
+### 3. 剧本编辑
+- AI剧本提取
+- 场景管理
+- 对白编辑
+- 批量编辑
+- 全局查找替换
+- 五元素故事分析
+
+### 4. 分镜制作
+- AI分镜提取
+- 多视图模式（列表/网格/时间轴）
+- AI图像生成
+- AI视频提示词
+- 批量操作
+- 版本历史
+- 导出功能
+
+### 5. 项目库
+- 角色管理
+- 场景管理
+- 道具管理
+- 服饰管理
+- AI图像生成
+- 使用率追踪
+
+### 6. 导演风格
+- 风格预设模板
+- 自定义风格参数
+- 批量应用到分镜
+
+## 开发规范
+
+### 代码风格
+- 使用 TypeScript 严格模式
+- 组件使用函数式组件 + Hooks
+- 文件命名使用 PascalCase (组件) 或 camelCase (工具)
+- 导出使用命名导出，避免默认导出
+
+### 组件规范
+- 页面组件放在 `pages/` 目录
+- 通用组件放在 `components/` 目录
+- 复杂页面使用子目录组织 (components/, hooks/)
+- 使用 `cn()` 函数合并类名
+
+### 数据规范
+- ID 使用 `generateId()` 生成
+- 时间使用 ISO 8601 格式
+- 图片使用 Base64 存储
+- 使用 `useLiveQuery` 实现响应式数据
+
+### 样式规范
+- 使用 Tailwind CSS 类名
+- 主题色：紫色渐变 (purple-600 to pink-600)
+- 间距基准：4px 网格
+- 圆角：rounded-lg (8px) 为主
+
+### AI服务规范
+- 使用 `callWithRetry` 包装 API 调用
+- 提示词优先使用英文
+- 支持取消和重试操作
+- 错误信息使用 toast 显示
+
+## 快捷键
+
+| 快捷键 | 功能 |
+|--------|------|
+| `Ctrl+S` | 保存 |
+| `Ctrl+Z` | 撤销 |
+| `Ctrl+Y` | 重做 |
+| `Ctrl+A` | 全选 |
+| `Delete` | 删除选中 |
+| `Escape` | 取消/清除选择 |
+
+## 注意事项
+
+1. **按钮动画**: 所有按钮已禁用点击动画效果
+2. **侧边栏**: 项目页面显示侧边栏导航
+3. **自动保存**: 分镜编辑器支持30秒自动保存
+4. **级联删除**: 删除项目会删除所有关联数据
+5. **响应式**: 支持移动端适配
+
+## 相关 Skills 文档
+
+- `chapter-editor.mdc` - 章节原文编辑
+- `script-editor.mdc` - 剧本编辑
+- `storyboard-editor.mdc` - 分镜制作
+- `asset-library.mdc` - 项目库管理
+- `director-style.mdc` - 导演风格
+- `ai-service.mdc` - AI服务
+- `data-storage.mdc` - 数据存储
+- `routing.mdc` - 路由导航
+- `ui-components.mdc` - UI组件
+- `project-management.mdc` - 项目管理

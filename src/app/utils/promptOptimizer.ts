@@ -1,260 +1,323 @@
-// AI提示词智能优化工具
-// 注意：此文件现在基于统一的 PromptEngine
-// 为了向后兼容保留原有接口，但内部使用 PromptEngine
-import type { DirectorStyle, Character, Scene, Prop, Costume } from '../types';
-import { PromptEngine } from './promptEngine';
+/**
+ * 提示词优化器
+ * - 压缩过长提示词
+ * - 按优先级保留关键信息
+ * - 平台适配
+ * - 语言转换
+ */
+
+import type { StoryboardPanel, Character, Scene, DirectorStyle } from '../types';
 
 /**
- * @deprecated 使用 PromptEngine 代替
- * 从导演风格生成基础提示词
+ * 提示词优化配置
  */
-export function generateBasePromptFromStyle(style: DirectorStyle): string {
-  const engine = new PromptEngine(style, { includeNegative: false, qualityTags: 'none' });
-  // 生成一个简单的提示词来获取风格部分
-  const dummy: any = { name: '', appearance: '' };
-  const result = engine.forCharacterFullBody(dummy, '');
-  
-  // 提取导演风格相关的部分
-  const parts: string[] = [];
-  if (style.artStyle) parts.push(style.artStyle);
-  if (style.colorTone) parts.push(style.colorTone);
-  if (style.lightingStyle) parts.push(style.lightingStyle);
-  if (style.cameraStyle) parts.push(style.cameraStyle);
-  if (style.mood) parts.push(`${style.mood}氛围`);
-  if (style.customPrompt) parts.push(style.customPrompt);
-  
-  return parts.join(', ');
+export interface OptimizeConfig {
+    maxLength?: number;        // 最大长度
+    platform?: 'generic' | 'kling' | 'runway' | 'pika' | 'midjourney' | 'doubao';
+    language?: 'zh' | 'en' | 'mixed';
+    prioritizeCharacters?: boolean;  // 优先保留角色信息
+    prioritizeScene?: boolean;       // 优先保留场景信息
+    removeQualityTags?: boolean;     // 移除质量标签以节省空间
 }
 
 /**
- * @deprecated 使用 PromptEngine.forCharacterFullBody() 代替
- * 为角色全身图应用导演风格
+ * 优化单个提示词
  */
-export function applyStyleToCharacterFullBody(
-  character: Character,
-  style: DirectorStyle,
-  existingPrompt?: string
+export function optimizePrompt(
+    prompt: string,
+    panel: StoryboardPanel,
+    config: OptimizeConfig = {}
 ): string {
-  const engine = new PromptEngine(style, { includeNegative: false });
-  return engine.forCharacterFullBody(character, existingPrompt).positive;
+    const {
+        maxLength = 200,
+        platform = 'generic',
+        language = 'mixed',
+        prioritizeCharacters = true,
+        prioritizeScene = true,
+        removeQualityTags = false
+    } = config;
+
+    if (!prompt || prompt.trim() === '') {
+        return prompt;
+    }
+
+    // 1. 分割提示词
+    const parts = prompt.split(/[,，]/).map(p => p.trim()).filter(p => p);
+
+    // 2. 移除质量标签（如果需要）
+    let filteredParts = parts;
+    if (removeQualityTags) {
+        const qualityKeywords = ['高质量', '8k', '4k', 'high quality', 'masterpiece', 'best quality', 
+                                 'ultra detailed', 'professional', 'cinematic', '专业', '精细'];
+        filteredParts = parts.filter(part => {
+            const lower = part.toLowerCase();
+            return !qualityKeywords.some(keyword => lower.includes(keyword.toLowerCase()));
+        });
+    }
+
+    // 3. 按优先级排序
+    const prioritized = prioritizeParts(filteredParts, panel, {
+        prioritizeCharacters,
+        prioritizeScene
+    });
+
+    // 4. 截取到目标长度
+    let optimized = '';
+    for (const part of prioritized) {
+        const separator = language === 'zh' ? '，' : ', ';
+        const newLength = optimized.length + part.length + separator.length;
+        if (newLength > maxLength) break;
+        optimized += (optimized ? separator : '') + part;
+    }
+
+    // 5. 平台适配
+    optimized = adaptForPlatform(optimized, platform);
+
+    // 6. 语言适配
+    if (language === 'zh') {
+        optimized = convertToChineseOnly(optimized);
+    } else if (language === 'en') {
+        optimized = convertToEnglishOnly(optimized);
+    }
+
+    return optimized;
 }
 
 /**
- * @deprecated 使用 PromptEngine.forCharacterFace() 代替
- * 为角色脸部图应用导演风格
+ * 按优先级排序提示词部分
  */
-export function applyStyleToCharacterFace(
-  character: Character,
-  style: DirectorStyle,
-  existingPrompt?: string
-): string {
-  const engine = new PromptEngine(style, { includeNegative: false });
-  return engine.forCharacterFace(character, existingPrompt).positive;
+function prioritizeParts(
+    parts: string[],
+    panel: StoryboardPanel,
+    options: { prioritizeCharacters: boolean; prioritizeScene: boolean }
+): string[] {
+    const scored = parts.map(part => {
+        let score = 0;
+        const lower = part.toLowerCase();
+
+        // 角色相关（最高优先级）
+        if (options.prioritizeCharacters && panel.characters) {
+            panel.characters.forEach(char => {
+                if (lower.includes(char.toLowerCase())) {
+                    score += 100;
+                }
+            });
+            if (lower.includes('char_')) score += 90; // 触发词
+        }
+
+        // 场景相关
+        if (options.prioritizeScene) {
+            if (lower.includes('场景') || lower.includes('环境') || lower.includes('scene')) score += 80;
+            if (lower.includes('办公室') || lower.includes('街道') || lower.includes('室内') || lower.includes('室外')) score += 75;
+        }
+
+        // 景别和角度（重要）
+        if (panel.shot && lower.includes(panel.shot.toLowerCase())) score += 70;
+        if (lower.includes('景') || lower.includes('shot')) score += 65;
+        if (panel.angle && lower.includes(panel.angle.toLowerCase())) score += 60;
+        if (lower.includes('视') || lower.includes('angle')) score += 55;
+
+        // 时间和天气
+        if (lower.includes('白天') || lower.includes('夜晚') || lower.includes('黄昏') || 
+            lower.includes('day') || lower.includes('night')) score += 50;
+        if (lower.includes('晴') || lower.includes('雨') || lower.includes('雪') || 
+            lower.includes('sunny') || lower.includes('rain')) score += 45;
+
+        // 动作和情绪
+        if (lower.includes('动作') || lower.includes('表情') || lower.includes('action') || lower.includes('emotion')) score += 40;
+        if (lower.includes('氛围') || lower.includes('情绪') || lower.includes('mood') || lower.includes('atmosphere')) score += 35;
+
+        // 技术参数
+        if (lower.includes('mm') || lower.includes('f/')) score += 30;
+        if (lower.includes('镜头') || lower.includes('lens')) score += 25;
+
+        // 风格和质量标签（最低优先级）
+        if (lower.includes('风格') || lower.includes('style')) score += 20;
+        if (lower.includes('质量') || lower.includes('quality')) score += 10;
+        if (lower.includes('8k') || lower.includes('4k') || lower.includes('高清')) score += 5;
+
+        return { part, score };
+    });
+
+    return scored
+        .sort((a, b) => b.score - a.score)
+        .map(item => item.part);
 }
 
 /**
- * @deprecated 使用 PromptEngine.forSceneWide() 代替
- * 为场景远景应用导演风格
+ * 平台适配
  */
-export function applyStyleToSceneWide(
-  scene: Scene,
-  style: DirectorStyle,
-  existingPrompt?: string
-): string {
-  const engine = new PromptEngine(style, { includeNegative: false });
-  return engine.forSceneWide(scene, existingPrompt).positive;
+function adaptForPlatform(prompt: string, platform: string): string {
+    switch (platform) {
+        case 'kling':
+            // 可灵：简洁中文，添加标签
+            return prompt + ' #视频生成 #电影感';
+        
+        case 'runway':
+            // Runway：结构化英文，添加质量参数
+            return prompt + ', cinematic video, 4K quality, smooth motion';
+        
+        case 'pika':
+            // Pika：自然语言，添加运动描述
+            return prompt + ', detailed motion, high quality';
+        
+        case 'midjourney':
+            // Midjourney：添加参数
+            return prompt + ' --ar 16:9 --style raw --v 6';
+        
+        case 'doubao':
+            // 豆包：中文优化
+            return prompt + '，高质量视频';
+        
+        default:
+            return prompt;
+    }
 }
 
 /**
- * @deprecated 使用 PromptEngine.forSceneMedium() 代替
- * 为场景中景应用导演风格
+ * 转换为纯中文
  */
-export function applyStyleToSceneMedium(
-  scene: Scene,
-  style: DirectorStyle,
-  existingPrompt?: string
-): string {
-  const engine = new PromptEngine(style, { includeNegative: false });
-  return engine.forSceneMedium(scene, existingPrompt).positive;
+function convertToChineseOnly(prompt: string): string {
+    // 移除英文部分（保留触发词和技术参数）
+    return prompt
+        .split(/[,，]/)
+        .map(p => p.trim())
+        .filter(p => {
+            // 保留触发词
+            if (p.startsWith('char_')) return true;
+            // 保留技术参数（如：50mm, f/2.8）
+            if (/\d+mm|f\/\d/.test(p)) return true;
+            // 保留中文部分
+            return /[\u4e00-\u9fa5]/.test(p);
+        })
+        .join('，');
 }
 
 /**
- * @deprecated 使用 PromptEngine.forSceneCloseup() 代替
- * 为场景特写应用导演风格
+ * 转换为纯英文
  */
-export function applyStyleToSceneCloseup(
-  scene: Scene,
-  style: DirectorStyle,
-  existingPrompt?: string
-): string {
-  const engine = new PromptEngine(style, { includeNegative: false });
-  return engine.forSceneCloseup(scene, existingPrompt).positive;
+function convertToEnglishOnly(prompt: string): string {
+    // 移除中文部分（保留触发词）
+    return prompt
+        .split(/[,，]/)
+        .map(p => p.trim())
+        .filter(p => {
+            // 保留触发词
+            if (p.startsWith('char_')) return true;
+            // 保留英文部分
+            return /[a-zA-Z]/.test(p);
+        })
+        .join(', ');
 }
 
 /**
- * @deprecated 使用 PromptEngine.forProp() 代替
- * 为道具应用导演风格
+ * 批量优化所有分镜的提示词
  */
-export function applyStyleToProp(
-  prop: Prop,
-  style: DirectorStyle,
-  existingPrompt?: string
-): string {
-  const engine = new PromptEngine(style, { includeNegative: false });
-  return engine.forProp(prop, existingPrompt).positive;
+export function optimizeAllPrompts(
+    panels: StoryboardPanel[],
+    config: OptimizeConfig = {}
+): StoryboardPanel[] {
+    console.log(`[Prompt Optimizer] 开始优化 ${panels.length} 个分镜的提示词...`);
+    
+    let optimizedCount = 0;
+    let totalSaved = 0;
+    
+    const optimizedPanels = panels.map(panel => {
+        const originalImageLength = panel.aiPrompt?.length || 0;
+        const originalVideoLength = panel.aiVideoPrompt?.length || 0;
+        
+        const optimizedImagePrompt = panel.aiPrompt 
+            ? optimizePrompt(panel.aiPrompt, panel, config)
+            : panel.aiPrompt;
+        
+        const optimizedVideoPrompt = panel.aiVideoPrompt
+            ? optimizePrompt(panel.aiVideoPrompt, panel, { ...config, maxLength: 250 })
+            : panel.aiVideoPrompt;
+        
+        const newImageLength = optimizedImagePrompt?.length || 0;
+        const newVideoLength = optimizedVideoPrompt?.length || 0;
+        
+        const saved = (originalImageLength - newImageLength) + (originalVideoLength - newVideoLength);
+        if (saved > 0) {
+            optimizedCount++;
+            totalSaved += saved;
+        }
+        
+        return {
+            ...panel,
+            aiPrompt: optimizedImagePrompt,
+            aiVideoPrompt: optimizedVideoPrompt
+        };
+    });
+    
+    console.log(`[Prompt Optimizer] 优化完成: ${optimizedCount}/${panels.length} 个分镜被优化`);
+    console.log(`[Prompt Optimizer] 总共节省: ${totalSaved} 字符`);
+    
+    return optimizedPanels;
 }
 
 /**
- * @deprecated 使用 PromptEngine.forCostume() 代替
- * 为服饰应用导演风格
+ * 智能优化：根据提示词长度自动决定是否需要优化
  */
-export function applyStyleToCostume(
-  costume: Costume,
-  character: Character | undefined,
-  style: DirectorStyle,
-  existingPrompt?: string
-): string {
-  const engine = new PromptEngine(style, { includeNegative: false });
-  return engine.forCostume(costume, character, existingPrompt).positive;
+export function smartOptimize(
+    panels: StoryboardPanel[],
+    config: OptimizeConfig = {}
+): StoryboardPanel[] {
+    const needsOptimization = panels.filter(panel => {
+        const imageLength = panel.aiPrompt?.length || 0;
+        const videoLength = panel.aiVideoPrompt?.length || 0;
+        return imageLength > 250 || videoLength > 300;
+    });
+    
+    if (needsOptimization.length === 0) {
+        console.log('[Prompt Optimizer] 所有提示词长度合适，无需优化');
+        return panels;
+    }
+    
+    console.log(`[Prompt Optimizer] 发现 ${needsOptimization.length} 个分镜需要优化`);
+    return optimizeAllPrompts(panels, config);
 }
 
 /**
- * 获取时间段描述
+ * 获取优化统计
  */
-function getTimeOfDayDescription(timeOfDay: 'day' | 'night' | 'dawn' | 'dusk'): string {
-  const descriptions = {
-    day: '白天，明亮的自然光',
-    night: '夜晚，月光或灯光照明',
-    dawn: '黎明，柔和的晨光',
-    dusk: '黄昏，温暖的夕阳光线',
-  };
-  return descriptions[timeOfDay] || '';
-}
-
-/**
- * 批量为所有角色应用导演风格
- */
-export function batchApplyStyleToCharacters(
-  characters: Character[],
-  style: DirectorStyle
-): Character[] {
-  return characters.map((character) => ({
-    ...character,
-    fullBodyPrompt: applyStyleToCharacterFullBody(character, style, character.fullBodyPrompt),
-    facePrompt: applyStyleToCharacterFace(character, style, character.facePrompt),
-  }));
-}
-
-/**
- * 批量为所有场景应用导演风格
- */
-export function batchApplyStyleToScenes(scenes: Scene[], style: DirectorStyle): Scene[] {
-  return scenes.map((scene) => ({
-    ...scene,
-    widePrompt: applyStyleToSceneWide(scene, style, scene.widePrompt),
-    mediumPrompt: applyStyleToSceneMedium(scene, style, scene.mediumPrompt),
-    closeupPrompt: applyStyleToSceneCloseup(scene, style, scene.closeupPrompt),
-  }));
-}
-
-/**
- * 批量为所有道具应用导演风格
- */
-export function batchApplyStyleToProps(props: Prop[], style: DirectorStyle): Prop[] {
-  return props.map((prop) => ({
-    ...prop,
-    aiPrompt: applyStyleToProp(prop, style, prop.aiPrompt),
-  }));
-}
-
-/**
- * 批量为所有服饰应用导演风格
- */
-export function batchApplyStyleToCostumes(
-  costumes: Costume[],
-  characters: Character[],
-  style: DirectorStyle
-): Costume[] {
-  return costumes.map((costume) => {
-    const character = characters.find((c) => c.id === costume.characterId);
+export function getOptimizationStats(
+    originalPanels: StoryboardPanel[],
+    optimizedPanels: StoryboardPanel[]
+): {
+    totalOriginalLength: number;
+    totalOptimizedLength: number;
+    savedCharacters: number;
+    savedPercentage: number;
+    optimizedCount: number;
+} {
+    let totalOriginalLength = 0;
+    let totalOptimizedLength = 0;
+    let optimizedCount = 0;
+    
+    originalPanels.forEach((panel, index) => {
+        const originalLength = (panel.aiPrompt?.length || 0) + (panel.aiVideoPrompt?.length || 0);
+        const optimizedLength = (optimizedPanels[index].aiPrompt?.length || 0) + 
+                                (optimizedPanels[index].aiVideoPrompt?.length || 0);
+        
+        totalOriginalLength += originalLength;
+        totalOptimizedLength += optimizedLength;
+        
+        if (optimizedLength < originalLength) {
+            optimizedCount++;
+        }
+    });
+    
+    const savedCharacters = totalOriginalLength - totalOptimizedLength;
+    const savedPercentage = totalOriginalLength > 0 
+        ? Math.round((savedCharacters / totalOriginalLength) * 100)
+        : 0;
+    
     return {
-      ...costume,
-      aiPrompt: applyStyleToCostume(costume, character, style, costume.aiPrompt),
+        totalOriginalLength,
+        totalOptimizedLength,
+        savedCharacters,
+        savedPercentage,
+        optimizedCount
     };
-  });
-}
-
-/**
- * 提示词模板库
- */
-export const PROMPT_TEMPLATES = {
-  character: {
-    fullBody: [
-      '全身正视图，站立姿态，双手自然下垂，白色背景',
-      '全身像，正面站立，自然光照明，简洁背景',
-      '完整身体展示，标准站姿，中性表情，纯色背景',
-    ],
-    face: [
-      '脸部特写，正面视角，中性表情，柔和光线',
-      '面部细节，五官清晰，温和表情，肖像摄影',
-      '头部特写，正面角度，自然表情，专业肖像',
-    ],
-  },
-  scene: {
-    wide: [
-      '远景镜头，宽广视角，全景展示，建立镜头',
-      '大远景，环境全貌，空间感强，电影构图',
-      '广角镜头，整体环境，深度层次，视觉震撼',
-    ],
-    medium: [
-      '中景镜头，主要区域，平衡构图，叙事清晰',
-      '中等距离，关键区域，细节可见，视觉聚焦',
-      '中景拍摄，重点突出，环境融合，故事感强',
-    ],
-    closeup: [
-      '特写镜头，细节展示，情感表达，视觉冲击',
-      '近距离特写，质感清晰，情绪饱满，艺术感强',
-      '微距特写，细节丰富，氛围浓厚，视觉焦点',
-    ],
-  },
-  prop: [
-    '产品视图，白色背景，清晰细节，专业摄影',
-    '物品展示，简洁背景，质感真实，光影自然',
-    '道具特写，纯色背景，细节丰富，商业摄影',
-  ],
-  costume: [
-    '服装展示，全身搭配，时尚摄影，清晰细节',
-    '服饰特写，款式清晰，材质展示，专业拍摄',
-    '穿搭展示，整体造型，风格明确，时尚感强',
-  ],
-};
-
-/**
- * 获取随机提示词模板
- */
-export function getRandomTemplate(
-  type: 'character' | 'scene' | 'prop' | 'costume',
-  subType?: 'fullBody' | 'face' | 'wide' | 'medium' | 'closeup'
-): string {
-  if (type === 'character' && subType) {
-    const templates = PROMPT_TEMPLATES.character[subType as 'fullBody' | 'face'];
-    return templates[Math.floor(Math.random() * templates.length)];
-  }
-
-  if (type === 'scene' && subType) {
-    const templates = PROMPT_TEMPLATES.scene[subType as 'wide' | 'medium' | 'closeup'];
-    return templates[Math.floor(Math.random() * templates.length)];
-  }
-
-  if (type === 'prop') {
-    const templates = PROMPT_TEMPLATES.prop;
-    return templates[Math.floor(Math.random() * templates.length)];
-  }
-
-  if (type === 'costume') {
-    const templates = PROMPT_TEMPLATES.costume;
-    return templates[Math.floor(Math.random() * templates.length)];
-  }
-
-  return '';
 }

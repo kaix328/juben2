@@ -1,12 +1,14 @@
 // 数据管理 Hook - 处理剧本加载、保存和自动保存
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { chapterStorage, scriptStorage, generateId, projectStorage } from '../../../utils/storage';
-import { extractScript, ScriptMode } from '../../../utils/aiService';
+import { extractScript, extractScriptInChunks, extractScriptGenerator, ScriptMode } from '../../../utils/ai';
 import { toast } from 'sonner';
+import { saveBackup } from '../../../utils/scriptBackup';
 import type { Script, ScriptScene, Dialogue, Chapter, ExtractProgress, HistoryEntry } from '../types';
 
 interface UseScriptDataOptions {
     chapterId: string | undefined;
+    scriptMode?: ScriptMode;
 }
 
 interface UseScriptDataReturn {
@@ -16,6 +18,14 @@ interface UseScriptDataReturn {
     // 状态
     isExtracting: boolean;
     extractProgress: ExtractProgress;
+    // 🆕 断点续传状态
+    isPaused: boolean;
+    curExtractChunk: number;
+    totalExtractChunks: number;
+    // 🆕 提取控制
+    handlePauseExtract: () => void;
+    handleResumeExtract: () => void;
+    handleStopExtract: () => void;
     lastSaved: string;
     // 历史记录
     history: HistoryEntry[];
@@ -40,16 +50,24 @@ interface UseScriptDataReturn {
     redo: () => void;
 }
 
-export function useScriptData({ chapterId }: UseScriptDataOptions): UseScriptDataReturn {
+export function useScriptData({ chapterId, scriptMode: externalScriptMode }: UseScriptDataOptions): UseScriptDataReturn {
     const isMountedRef = useRef(true);
 
     const [chapter, setChapter] = useState<Chapter | null>(null);
     const [script, setScript] = useState<Script | null>(null);
     const [directorStyle, setDirectorStyle] = useState<{ artStyle?: string; mood?: string; customPrompt?: string } | undefined>();
     const [isExtracting, setIsExtracting] = useState(false);
+    // 🆕 提取状态
+    const [isPaused, setIsPaused] = useState(false);
+    const [curExtractChunk, setCurExtractChunk] = useState(0);
+    const [totalExtractChunks, setTotalExtractChunks] = useState(0);
+    // Refs for control flow
+    const stopSignalRef = useRef(false);
+    const pauseSignalRef = useRef(false);
+
     const [extractProgress, setExtractProgress] = useState<ExtractProgress>({ step: 'idle', message: '' });
     const [lastSaved, setLastSaved] = useState('');
-    const [scriptMode, setScriptMode] = useState<ScriptMode>('tv_drama');
+    const scriptMode = externalScriptMode || 'tv_drama';
 
     // 历史记录状态
     const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -91,39 +109,48 @@ export function useScriptData({ chapterId }: UseScriptDataOptions): UseScriptDat
         isMountedRef.current = true;
 
         const loadData = async () => {
-            if (chapterId) {
-                const chapterData = await chapterStorage.getById(chapterId);
-                if (isMountedRef.current) {
-                    setChapter(chapterData || null);
-                }
+            try {
+                if (chapterId) {
+                    const chapterData = await chapterStorage.getById(chapterId);
+                    if (isMountedRef.current) {
+                        setChapter(chapterData || null);
+                    }
 
-                // 🆕 加载项目的导演风格
-                if (chapterData?.projectId) {
-                    const project = await projectStorage.getById(chapterData.projectId);
-                    if (project?.directorStyle && isMountedRef.current) {
-                        setDirectorStyle(project.directorStyle);
+                    // 🆕 加载项目的导演风格
+                    if (chapterData?.projectId) {
+                        try {
+                            const project = await projectStorage.getById(chapterData.projectId);
+                            if (project?.directorStyle && isMountedRef.current) {
+                                setDirectorStyle(project.directorStyle);
+                            }
+                        } catch (err) {
+                            console.error('[loadData] Failed to load project:', err);
+                        }
+                    }
+
+                    const scriptData = await scriptStorage.getByChapterId(chapterId);
+
+                    if (scriptData && isMountedRef.current) {
+                        // 数据迁移
+                        const migratedScenes = scriptData.scenes.map(scene => ({
+                            ...scene,
+                            sceneType: scene.sceneType || 'INT' as const,
+                            dialogues: scene.dialogues || [],
+                            transition: scene.transition,
+                            estimatedDuration: scene.estimatedDuration || 0,
+                        }));
+                        const migratedScript = { ...scriptData, scenes: migratedScenes };
+                        setScript(migratedScript);
+                        // 初始化历史记录
+                        setHistory([{ script: migratedScript, timestamp: Date.now(), description: '初始加载' }]);
+                        setHistoryIndex(0);
+                    } else if (isMountedRef.current) {
+                        setScript(null);
                     }
                 }
-
-                const scriptData = await scriptStorage.getByChapterId(chapterId);
-
-                if (scriptData && isMountedRef.current) {
-                    // 数据迁移
-                    const migratedScenes = scriptData.scenes.map(scene => ({
-                        ...scene,
-                        sceneType: scene.sceneType || 'INT' as const,
-                        dialogues: scene.dialogues || [],
-                        transition: scene.transition,
-                        estimatedDuration: scene.estimatedDuration || 0,
-                    }));
-                    const migratedScript = { ...scriptData, scenes: migratedScenes };
-                    setScript(migratedScript);
-                    // 初始化历史记录
-                    setHistory([{ script: migratedScript, timestamp: Date.now(), description: '初始加载' }]);
-                    setHistoryIndex(0);
-                } else if (isMountedRef.current) {
-                    setScript(null);
-                }
+            } catch (error) {
+                console.error('[useScriptData] Failed to load data:', error);
+                safeToast('加载数据失败', 'error');
             }
         };
 
@@ -157,7 +184,40 @@ export function useScriptData({ chapterId }: UseScriptDataOptions): UseScriptDat
         return () => clearTimeout(timer);
     }, [script]);
 
-    // AI 提取
+    // 🆕 自动备份（每分钟一次）
+    useEffect(() => {
+        if (!script || !chapterId) return;
+
+        const backupTimer = setInterval(() => {
+            saveBackup(chapterId, script, 'auto');
+        }, 60000); // 60秒
+
+        return () => clearInterval(backupTimer);
+    }, [script, chapterId]);
+
+    // 提取控制
+    const handlePauseExtract = useCallback(() => {
+        pauseSignalRef.current = true;
+        setIsPaused(true);
+        safeToast('已暂停提取，点击"继续提取"可恢复');
+    }, [safeToast]);
+
+    const handleResumeExtract = useCallback(() => {
+        if (!isPaused) return;
+        pauseSignalRef.current = false;
+        setIsPaused(false);
+        handleAIExtract(); // 重新调用提取，它会读取 curExtractChunk
+    }, [isPaused]); // handleAIExtract 在下面定义，需要注意依赖
+
+    const handleStopExtract = useCallback(() => {
+        stopSignalRef.current = true;
+        setIsExtracting(false);
+        setIsPaused(false);
+        setExtractProgress({ step: 'idle', message: '' });
+        safeToast('已终止提取');
+    }, [safeToast]);
+
+    // AI 提取 (核心逻辑)
     const handleAIExtract = useCallback(async () => {
         if (!chapter || !chapter.originalText) {
             safeToast('请先在"原文编辑"中添加内容', 'error');
@@ -165,52 +225,111 @@ export function useScriptData({ chapterId }: UseScriptDataOptions): UseScriptDat
         }
 
         if (!isMountedRef.current) return;
-        setIsExtracting(true);
-        setExtractProgress({ step: 'parsing', message: '正在解析原文...' });
+
+        // 如果不是暂停恢复，重置状态
+        if (!isPaused) {
+            setIsExtracting(true);
+            setExtractProgress({ step: 'parsing', message: '正在解析原文...' });
+            stopSignalRef.current = false;
+            pauseSignalRef.current = false;
+            setCurExtractChunk(0);
+        } else {
+            // 恢复时，UI状态更新
+            setIsExtracting(true);
+            setIsPaused(false);
+            pauseSignalRef.current = false;
+        }
 
         try {
-            setExtractProgress({ step: 'extracting', message: '正在提取场景与对白...' });
-            const scenes = await extractScript(chapter.originalText, scriptMode, directorStyle);
+            // 使用生成器模式进行提取
+            const generator = extractScriptGenerator(
+                chapter.originalText,
+                scriptMode,
+                directorStyle,
+                curExtractChunk // 从当前断点开始
+            );
 
-            setExtractProgress({ step: 'validating', message: '正在校验数据格式...' });
+            for await (const result of generator) {
+                // 检查停止信号
+                if (stopSignalRef.current) {
+                    break;
+                }
 
-            const newScript: Script = {
-                id: script?.id || generateId(),
-                chapterId: chapter.id,
-                content: '',
-                scenes,
-                updatedAt: new Date().toISOString(),
-                mode: scriptMode,
-                metadata: {
-                    title: chapter.title,
-                    draftDate: new Date().toISOString().split('T')[0],
-                    draft: '初稿',
-                },
-            };
+                // 更新进度
+                setCurExtractChunk(result.chunkIndex + 1);
+                setTotalExtractChunks(result.totalChunks);
+                setExtractProgress({
+                    step: 'extracting',
+                    message: `正在提取第 ${result.chunkIndex + 1}/${result.totalChunks} 段...`
+                });
 
-            await scriptStorage.save(newScript);
+                if (result.scenes.length > 0) {
+                    // 增量更新剧本
+                    setScript(prev => {
+                        const baseScript = prev || {
+                            id: generateId(),
+                            chapterId: chapter.id,
+                            content: '',
+                            scenes: [],
+                            updatedAt: new Date().toISOString(),
+                            mode: scriptMode,
+                            metadata: {
+                                title: chapter.title,
+                                draftDate: new Date().toISOString().split('T')[0],
+                                draft: '初稿',
+                            },
+                        };
 
-            if (isMountedRef.current) {
-                setScript(newScript);
-                pushHistory(newScript, 'AI 提取剧本');
+                        const newScenes = [...baseScript.scenes, ...result.scenes];
+                        // 重新编号
+                        const renumberedScenes = newScenes.map((s, idx) => ({ ...s, sceneNumber: idx + 1 }));
+
+                        return { ...baseScript, scenes: renumberedScenes };
+                    });
+                }
+
+                // 检查暂停信号
+                if (pauseSignalRef.current) {
+                    setIsPaused(true);
+                    setIsExtracting(false); // 暂停时退出提取状态，允许用户操作
+                    setExtractProgress({ step: 'idle', message: '已暂停' }); // 清除进度条显示? 或者显示暂停状态
+                    return; // 退出循环，状态保留在 curExtractChunk
+                }
+            }
+
+            if (!stopSignalRef.current) {
+                // 完成
+                setExtractProgress({ step: 'validating', message: '正在校验数据格式...' });
+
+                // 这里其实已经在循环中增量保存了 script state，但为了触发 auto-save 和 history，可以再次确认
+                // 或者直接通过 effect 触发保存
+
+                // 完成后重置断点
+                setCurExtractChunk(0);
                 setExtractProgress({ step: 'done', message: '提取完成！' });
                 safeToast('AI提取完成！');
-            }
-        } catch (error) {
-            setExtractProgress({ step: 'error', message: '提取失败，请重试' });
-            safeToast('提取失败，请重试', 'error');
-        } finally {
-            if (isMountedRef.current) {
-                setIsExtracting(false);
-                // 3秒后重置进度状态
+
+                // 3秒后重置
                 setTimeout(() => {
-                    if (isMountedRef.current) {
+                    if (isMountedRef.current && !isExtracting) { // 只有非提取状态才重置
                         setExtractProgress({ step: 'idle', message: '' });
                     }
                 }, 3000);
             }
+
+        } catch (error) {
+            console.error(error);
+            setExtractProgress({ step: 'error', message: '提取失败，请重试' });
+            safeToast('提取失败，请重试', 'error');
+        } finally {
+            if (isMountedRef.current) {
+                // 只有完全结束或停止时才这里设为 false
+                if (!pauseSignalRef.current) {
+                    setIsExtracting(false);
+                }
+            }
         }
-    }, [chapter, script, safeToast, pushHistory, scriptMode, directorStyle]);
+    }, [chapter, scriptMode, directorStyle, curExtractChunk, isPaused, safeToast]);
 
     // 保存
     const handleSave = useCallback(async () => {
@@ -399,6 +518,15 @@ export function useScriptData({ chapterId }: UseScriptDataOptions): UseScriptDat
         historyIndex,
         canUndo: historyIndex > 0,
         canRedo: historyIndex < history.length - 1,
+        // 🆕 提取控制
+        handlePauseExtract,
+        handleResumeExtract,
+        handleStopExtract,
+        // 状态
+        isPaused,
+        curExtractChunk,
+        totalExtractChunks,
+
         handleAIExtract,
         handleSave,
         handleUpdateScene,

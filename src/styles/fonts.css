@@ -1,0 +1,5 @@
+/**
+ * 字体导入
+ * 使用独特的字体组合，避免 Inter/Roboto 等通用字体
+ */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');

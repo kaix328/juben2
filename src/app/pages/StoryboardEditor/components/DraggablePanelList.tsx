@@ -74,10 +74,11 @@ export const DraggablePanelList: React.FC<DraggablePanelListProps> = ({
                     onDrop={(e) => handleDrop(e, index)}
                     className={`relative transition-transform ${dragOverIndex === index ? 'transform translate-y-2 border-t-4 border-blue-500' : ''
                         }`}
+                    data-panel-number={panel.panelNumber}
                 >
                     {/* 拖拽指示器 */}
                     {dragOverIndex === index && draggedIndex !== index && (
-                        <div className="absolute -top-1 left-0 right-0 h-1 bg-blue-500 rounded-full" />
+                        <div className="absolute -top-1 left-0 right-0 h-1 bg-blue-500 rounded-full z-10" />
                     )}
                     {renderPanel(panel, index, draggedIndex === index, dragOverIndex === index)}
                 </div>

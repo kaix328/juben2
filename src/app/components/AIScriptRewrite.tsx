@@ -2,8 +2,8 @@
  * AI 对话式改稿组件
  * 选中剧本片段，通过对话方式进行 AI 改写
  */
-import React, { useState, useCallback } from 'react';
-import { Sparkles, Send, RefreshCw, Check, Copy, X } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import { Sparkles, Send, RefreshCw, Check, Copy } from 'lucide-react';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Card, CardContent } from './ui/card';
@@ -15,6 +15,7 @@ import {
 } from './ui/dialog';
 import { toast } from 'sonner';
 import { cn } from '../utils/classnames';
+import { scriptRefiner } from '../utils/ai/scriptRefiner';
 
 interface AIScriptRewriteProps {
     selectedText: string;
@@ -51,7 +52,7 @@ export function AIScriptRewrite({
     const [isLoading, setIsLoading] = useState(false);
     const [selectedVersion, setSelectedVersion] = useState<string | null>(null);
 
-    // 模拟 AI 改写（实际应调用 AI API）
+    // AI 改写
     const handleRewrite = useCallback(async (customInstruction?: string) => {
         const finalInstruction = customInstruction || instruction;
         if (!finalInstruction.trim()) {
@@ -62,29 +63,36 @@ export function AIScriptRewrite({
         setIsLoading(true);
 
         try {
-            // 模拟 AI 响应（实际项目中替换为真实 API 调用）
-            await new Promise(resolve => setTimeout(resolve, 1500));
-
-            // 生成改写版本（示例）
-            const rewrittenText = generateMockRewrite(selectedText, finalInstruction);
-
-            const newVersion: RewriteVersion = {
-                id: Date.now().toString(),
-                text: rewrittenText,
+            // 调用 AI Service
+            // 建议后续重构调用方传入 context
+            const result = await scriptRefiner.refine(selectedText, {
+                projectId: 'current', // Placeholder
+                chapterId: 'current', // Placeholder
+            }, {
                 instruction: finalInstruction,
-                createdAt: new Date()
-            };
+                mode: 'refine'
+            });
 
-            setVersions(prev => [newVersion, ...prev]);
-            setSelectedVersion(newVersion.id);
-            setInstruction('');
-            toast.success('AI 改写完成');
+            if (result) {
+                const newVersion: RewriteVersion = {
+                    id: Date.now().toString(),
+                    text: result,
+                    instruction: finalInstruction,
+                    createdAt: new Date()
+                };
+
+                setVersions(prev => [newVersion, ...prev]);
+                setSelectedVersion(newVersion.id);
+                setInstruction('');
+                toast.success('AI 改写完成');
+            }
         } catch (error) {
             toast.error('改写失败，请重试');
         } finally {
             setIsLoading(false);
         }
     }, [instruction, selectedText]);
+
 
     const handleApply = useCallback(() => {
         const version = versions.find(v => v.id === selectedVersion);
@@ -238,24 +246,4 @@ export function AIScriptRewrite({
     );
 }
 
-// 模拟 AI 改写（实际应替换为真实 API）
-function generateMockRewrite(original: string, instruction: string): string {
-    // 简单的模拟改写逻辑
-    const modifications: Record<string, (text: string) => string> = {
-        '紧张': (text) => text.replace(/。/g, '！').replace(/[，,]/g, '，') + '\n（气氛紧张）',
-        '浪漫': (text) => `月光洒落，${text.replace(/。/g, '...').replace(/！/g, '~')}`,
-        '幽默': (text) => text + '\n（观众笑声）',
-        '简洁': (text) => text.split('。').slice(0, 2).join('。') + '。',
-        '详细': (text) => `在这个场景中，${text}\n（镜头缓慢推进，细节丰富）`,
-        '对白': (text) => `角色A：${text.slice(0, 20)}...\n角色B：我明白了。\n${text}`,
-    };
 
-    for (const [key, transform] of Object.entries(modifications)) {
-        if (instruction.includes(key)) {
-            return transform(original);
-        }
-    }
-
-    // 默认改写
-    return `【AI改写】${original}\n\n（根据指令"${instruction}"进行了优化）`;
-}

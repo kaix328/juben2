@@ -1,3 +1,20 @@
 @import './fonts.css';
 @import './tailwind.css';
 @import './theme.css';
+@import './animations.css';
+@import './mobile.css';
+@import './dark-theme.css';
+/* 🆕 深色主题 */
+@import './asset-library-performance.css';
+/* 🆕 资源库性能优化 */
+
+/* 全局禁用按钮点击动画 */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+[role="button"],
+a {
+  outline: none !important;
+}

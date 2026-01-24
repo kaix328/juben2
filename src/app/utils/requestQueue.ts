@@ -1,334 +1,400 @@
 /**
- * 通用并发请求队列
- * 
- * 用于管理具有并发限制的异步任务（如 AI 生成、大量图片上传等）
+ * 请求队列管理器
+ * 支持并发控制、超时、重试等功能
  */
 
-export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+// ============ 类型定义 ============
+
+export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'timeout' | 'cancelled';
 
 export interface Task<T = any> {
-    id: string;
-    priority?: number;
-    execute: (signal?: AbortSignal) => Promise<T>;  // 🆕 支持 AbortSignal
-    status: TaskStatus;
-    result?: T;
-    error?: any;
-    metadata?: any;
-    abortController?: AbortController;  // 🆕 用于取消正在运行的任务
-    retryCount?: number;  // 🆕 重试次数
-    startTime?: number;   // 🆕 开始时间（用于超时检测）
+  id: string;
+  fn: () => Promise<T>;
+  status: TaskStatus;
+  result?: T;
+  error?: Error;
+  startTime?: number;
+  endTime?: number;
+  retryCount: number;
 }
 
-export interface QueueOptions {
-    maxConcurrency: number;
-    timeout?: number;  // 🆕 单任务超时时间（毫秒）
-    maxRetries?: number;  // 🆕 最大重试次数
-    onTaskComplete?: (task: Task) => Promise<void> | void;
-    onTaskFailed?: (task: Task, error: any) => Promise<void> | void;
-    onTaskStatusChange?: (task: Task) => Promise<void> | void;
-    onTaskTimeout?: (task: Task) => Promise<void> | void;  // 🆕 超时回调
-    onQueueEmpty?: () => Promise<void> | void;
+export interface RequestQueueOptions {
+  maxConcurrency?: number;
+  timeout?: number;
+  maxRetries?: number;
+  retryDelay?: number;
+  onTaskStatusChange?: (task: Task) => void;
+  onTaskTimeout?: (task: Task) => void;
+  onTaskFailed?: (task: Task, error: Error) => void;
+  onTaskCompleted?: (task: Task) => void;
 }
+
+// ============ 请求队列 ============
 
 export class RequestQueue {
-    private tasks: Task[] = [];
-    private runningCount = 0;
-    private options: QueueOptions;
-    private isPaused = false;
-    private isCancelled = false;  // 🆕 全局取消标志
-    private batchResolvers: Array<{ ids: Set<string>, resolve: (tasks: Task[]) => void }> = [];
+  private queue: Task[] = [];
+  private running: Map<string, Task> = new Map();
+  private completed: Map<string, Task> = new Map();
+  private maxConcurrency: number;
+  private timeout: number;
+  private maxRetries: number;
+  private retryDelay: number;
+  private onTaskStatusChange?: (task: Task) => void;
+  private onTaskTimeout?: (task: Task) => void;
+  private onTaskFailed?: (task: Task, error: Error) => void;
+  private onTaskCompleted?: (task: Task) => void;
 
-    constructor(options: Partial<QueueOptions> = {}) {
-        this.options = {
-            maxConcurrency: options.maxConcurrency || 3,
-            timeout: options.timeout || 60000,  // 默认 60 秒超时
-            maxRetries: options.maxRetries || 0,
-            ...options
-        };
+  constructor(options: RequestQueueOptions = {}) {
+    this.maxConcurrency = options.maxConcurrency || 3;
+    this.timeout = options.timeout || 60000; // 默认60秒
+    this.maxRetries = options.maxRetries || 0;
+    this.retryDelay = options.retryDelay || 1000;
+    this.onTaskStatusChange = options.onTaskStatusChange;
+    this.onTaskTimeout = options.onTaskTimeout;
+    this.onTaskFailed = options.onTaskFailed;
+    this.onTaskCompleted = options.onTaskCompleted;
+  }
+
+  /**
+   * 添加任务到队列
+   */
+  add<T>(id: string, fn: () => Promise<T>): Promise<T> {
+    return new Promise((resolve, reject) => {
+      const task: Task<T> = {
+        id,
+        fn: async () => {
+          try {
+            const result = await fn();
+            resolve(result);
+            return result;
+          } catch (error) {
+            reject(error);
+            throw error;
+          }
+        },
+        status: 'pending',
+        retryCount: 0
+      };
+
+      this.queue.push(task);
+      this.updateTaskStatus(task, 'pending');
+      this.processQueue();
+    });
+  }
+
+  /**
+   * 处理队列
+   */
+  private async processQueue() {
+    while (this.queue.length > 0 && this.running.size < this.maxConcurrency) {
+      const task = this.queue.shift();
+      if (!task) break;
+
+      this.running.set(task.id, task);
+      this.executeTask(task);
+    }
+  }
+
+  /**
+   * 执行任务
+   */
+  private async executeTask(task: Task) {
+    task.startTime = Date.now();
+    this.updateTaskStatus(task, 'running');
+
+    try {
+      // 创建超时Promise
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('Task timeout'));
+        }, this.timeout);
+      });
+
+      // 执行任务或超时
+      const result = await Promise.race([
+        task.fn(),
+        timeoutPromise
+      ]);
+
+      task.result = result;
+      task.endTime = Date.now();
+      this.updateTaskStatus(task, 'completed');
+      this.onTaskCompleted?.(task);
+      this.completeTask(task);
+    } catch (error) {
+      const err = error as Error;
+
+      // 检查是否超时
+      if (err.message === 'Task timeout') {
+        task.endTime = Date.now();
+        this.updateTaskStatus(task, 'timeout');
+        this.onTaskTimeout?.(task);
+        this.completeTask(task);
+        return;
+      }
+
+      // 检查是否需要重试
+      if (task.retryCount < this.maxRetries) {
+        task.retryCount++;
+        console.log(`[RequestQueue] Retrying task ${task.id} (${task.retryCount}/${this.maxRetries})`);
+
+        // 延迟后重试
+        await new Promise(resolve => setTimeout(resolve, this.retryDelay));
+
+        // 重新加入队列
+        this.running.delete(task.id);
+        this.queue.unshift(task);
+        this.processQueue();
+        return;
+      }
+
+      // 失败
+      task.error = err;
+      task.endTime = Date.now();
+      this.updateTaskStatus(task, 'failed');
+      this.onTaskFailed?.(task, err);
+      this.completeTask(task);
+    }
+  }
+
+  /**
+   * 完成任务
+   */
+  private completeTask(task: Task) {
+    this.running.delete(task.id);
+    this.completed.set(task.id, task);
+    this.processQueue();
+  }
+
+  /**
+   * 更新任务状态
+   */
+  private updateTaskStatus(task: Task, status: TaskStatus) {
+    task.status = status;
+    this.onTaskStatusChange?.(task);
+  }
+
+  /**
+   * 取消任务
+   */
+  cancel(id: string): boolean {
+    // 从队列中移除
+    const queueIndex = this.queue.findIndex(t => t.id === id);
+    if (queueIndex !== -1) {
+      const task = this.queue[queueIndex];
+      this.queue.splice(queueIndex, 1);
+      this.updateTaskStatus(task, 'cancelled');
+      return true;
     }
 
-    /**
-     * 添加任务到队列
-     */
-    addTask<T>(id: string, execute: () => Promise<T>, metadata?: any, priority = 0): string {
-        const task: Task<T> = {
-            id,
-            priority,
-            execute,
-            status: 'pending',
-            metadata
-        };
-        this.tasks.push(task);
-        this.tasks.sort((a, b) => (b.priority || 0) - (a.priority || 0));
-
-        this.notifyStatusChange(task);
-        this.process();
-        return id;
+    // 取消正在运行的任务（注意：无法真正中断Promise）
+    const runningTask = this.running.get(id);
+    if (runningTask) {
+      this.updateTaskStatus(runningTask, 'cancelled');
+      this.running.delete(id);
+      this.completed.set(id, runningTask);
+      this.processQueue();
+      return true;
     }
 
-    /**
-     * 批量添加任务
-     */
-    addTasks(tasks: { id: string, execute: () => Promise<any>, metadata?: any, priority?: number }[]) {
-        tasks.forEach(t => {
-            const task: Task = {
-                id: t.id,
-                priority: t.priority || 0,
-                execute: t.execute,
-                status: 'pending',
-                metadata: t.metadata
-            };
-            this.tasks.push(task);
-        });
-        this.tasks.sort((a, b) => (b.priority || 0) - (a.priority || 0));
-        this.process();
+    return false;
+  }
+
+  /**
+   * 取消所有任务
+   */
+  cancelAll() {
+    // 取消队列中的任务
+    this.queue.forEach(task => {
+      this.updateTaskStatus(task, 'cancelled');
+    });
+    this.queue = [];
+
+    // 取消正在运行的任务
+    this.running.forEach(task => {
+      this.updateTaskStatus(task, 'cancelled');
+      this.completed.set(task.id, task);
+    });
+    this.running.clear();
+  }
+
+  /**
+   * 获取任务状态
+   */
+  getTaskStatus(id: string): TaskStatus | null {
+    // 检查队列
+    const queueTask = this.queue.find(t => t.id === id);
+    if (queueTask) return queueTask.status;
+
+    // 检查运行中
+    const runningTask = this.running.get(id);
+    if (runningTask) return runningTask.status;
+
+    // 检查已完成
+    const completedTask = this.completed.get(id);
+    if (completedTask) return completedTask.status;
+
+    return null;
+  }
+
+  /**
+   * 获取任务
+   */
+  getTask(id: string): Task | null {
+    const queueTask = this.queue.find(t => t.id === id);
+    if (queueTask) return queueTask;
+
+    const runningTask = this.running.get(id);
+    if (runningTask) return runningTask;
+
+    const completedTask = this.completed.get(id);
+    if (completedTask) return completedTask;
+
+    return null;
+  }
+
+  /**
+   * 获取统计信息
+   */
+  getStats() {
+    return {
+      pending: this.queue.length,
+      running: this.running.size,
+      completed: Array.from(this.completed.values()).filter(t => t.status === 'completed').length,
+      failed: Array.from(this.completed.values()).filter(t => t.status === 'failed').length,
+      timeout: Array.from(this.completed.values()).filter(t => t.status === 'timeout').length,
+      cancelled: Array.from(this.completed.values()).filter(t => t.status === 'cancelled').length,
+      total: this.queue.length + this.running.size + this.completed.size
+    };
+  }
+
+  /**
+   * 清空已完成的任务
+   */
+  clearCompleted() {
+    this.completed.clear();
+  }
+
+  /**
+   * 等待所有任务完成
+   */
+  async waitAll(): Promise<void> {
+    while (this.queue.length > 0 || this.running.size > 0) {
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
+  }
 
-    /**
-     * 等待某一批 ID 的任务全部完成
-     */
-    async waitForBatch(ids: Set<string>): Promise<Task[]> {
-        const getBatchTasks = () => this.tasks.filter(t => ids.has(t.id));
-        const isDready = () => {
-            const tasks = getBatchTasks();
-            if (tasks.length < ids.size) return false;
-            return tasks.every(t => ['completed', 'failed', 'cancelled'].includes(t.status));
-        };
+  /**
+   * 获取队列长度
+   */
+  get queueLength(): number {
+    return this.queue.length;
+  }
 
-        if (isDready()) {
-            return getBatchTasks();
-        }
+  /**
+   * 获取运行中任务数
+   */
+  get runningCount(): number {
+    return this.running.size;
+  }
 
-        return new Promise((resolve) => {
-            this.batchResolvers.push({ ids, resolve });
-        });
+  /**
+   * 是否空闲
+   */
+  get isIdle(): boolean {
+    return this.queue.length === 0 && this.running.size === 0;
+  }
+
+  /**
+   * 设置并发数
+   */
+  setMaxConcurrency(max: number) {
+    this.maxConcurrency = Math.max(1, max);
+    this.processQueue();
+  }
+
+  /**
+   * 设置超时时间
+   */
+  setTimeout(timeout: number) {
+    this.timeout = Math.max(1000, timeout);
+  }
+
+  /**
+   * 暂停队列
+   */
+  pause() {
+    // 简单实现：清空队列但保留任务
+    // 实际应用中可能需要更复杂的暂停/恢复机制
+  }
+
+  /**
+   * 恢复队列
+   */
+  resume() {
+    this.processQueue();
+  }
+
+  /**
+   * 批量添加任务
+   */
+  async addTasks(tasks: { id: string; execute: () => Promise<any> }[]) {
+    return Promise.all(tasks.map(t => this.add(t.id, t.execute)));
+  }
+
+  /**
+   * 等待指定批次任务完成
+   */
+  async waitForBatch(ids: Set<string>): Promise<void> {
+    const check = () => {
+      const allDone = Array.from(ids).every(id => {
+        const status = this.getTaskStatus(id);
+        return status === 'completed' || status === 'failed' || status === 'timeout' || status === 'cancelled';
+      });
+      return allDone;
+    };
+
+    while (!check()) {
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
+  }
 
-    /**
-     * 检查并触发批次解析器
-     */
-    private checkBatchResolvers() {
-        this.batchResolvers = this.batchResolvers.filter(resolver => {
-            const tasks = this.tasks.filter(t => resolver.ids.has(t.id));
-            const allDone = tasks.length >= resolver.ids.size &&
-                tasks.every(t => ['completed', 'failed', 'cancelled'].includes(t.status));
+  /**
+   * 获取所有任务
+   */
+  getTasks(): Task[] {
+    return [
+      ...Array.from(this.completed.values()),
+      ...Array.from(this.running.values()),
+      ...this.queue
+    ];
+  }
 
-            if (allDone) {
-                resolver.resolve(tasks);
-                return false;
-            }
-            return true;
-        });
-    }
+  /**
+   * 重试失败的任务
+   */
+  async retryFailed(ids?: Set<string>) {
+    const failedTasks = Array.from(this.completed.values()).filter(t =>
+      t.status === 'failed' || t.status === 'timeout'
+    );
 
-    /**
-     * 开始处理队列
-     */
-    private async process() {
-        if (this.isPaused || this.isCancelled || this.runningCount >= this.options.maxConcurrency) {
-            return;
-        }
+    const toRetry = ids
+      ? failedTasks.filter(t => ids.has(t.id))
+      : failedTasks;
 
-        const nextTask = this.tasks.find(t => t.status === 'pending');
-        if (!nextTask) {
-            if (this.runningCount === 0 && this.options.onQueueEmpty) {
-                try {
-                    await this.options.onQueueEmpty();
-                } catch (e) {
-                    console.error('[RequestQueue] onQueueEmpty error:', e);
-                }
-            }
-            return;
-        }
+    // 将失败任务从完成列表中移除，重置状态并重新添加到队列
+    toRetry.forEach(task => {
+      this.completed.delete(task.id);
+      task.status = 'pending';
+      task.retryCount = 0;
+      task.error = undefined;
+      task.result = undefined;
+      this.queue.push(task);
+      this.updateTaskStatus(task, 'pending');
+    });
 
-        // 🆕 创建 AbortController
-        const abortController = new AbortController();
-        nextTask.abortController = abortController;
-        nextTask.status = 'running';
-        nextTask.startTime = Date.now();
-        this.runningCount++;
-        await this.notifyStatusChange(nextTask);
-
-        // 🆕 超时处理
-        let timeoutId: ReturnType<typeof setTimeout> | undefined;
-        if (this.options.timeout && this.options.timeout > 0) {
-            timeoutId = setTimeout(() => {
-                if (nextTask.status === 'running') {
-                    abortController.abort();
-                    this.options.onTaskTimeout?.(nextTask);
-                }
-            }, this.options.timeout);
-        }
-
-        try {
-            const result = await nextTask.execute(abortController.signal);
-            if (timeoutId) clearTimeout(timeoutId);
-
-            if (this.isCancelled || abortController.signal.aborted) {
-                nextTask.status = 'cancelled';
-            } else {
-                nextTask.status = 'completed';
-                nextTask.result = result;
-                if (this.options.onTaskComplete) {
-                    await this.options.onTaskComplete(nextTask);
-                }
-            }
-        } catch (error: any) {
-            if (timeoutId) clearTimeout(timeoutId);
-
-            if (error.name === 'AbortError' || abortController.signal.aborted) {
-                nextTask.status = 'cancelled';
-            } else {
-                // 🆕 重试逻辑
-                const retryCount = nextTask.retryCount || 0;
-                if (this.options.maxRetries && retryCount < this.options.maxRetries) {
-                    nextTask.retryCount = retryCount + 1;
-                    nextTask.status = 'pending';  // 重新加入队列
-                } else {
-                    nextTask.status = 'failed';
-                    nextTask.error = error;
-                    if (this.options.onTaskFailed) {
-                        await this.options.onTaskFailed(nextTask, error);
-                    }
-                }
-            }
-        } finally {
-            this.runningCount--;
-            nextTask.abortController = undefined;
-            await this.notifyStatusChange(nextTask);
-            this.process();
-        }
-
-        // 尝试启动更多并发任务
-        if (this.runningCount < this.options.maxConcurrency) {
-            this.process();
-        }
-    }
-
-    /**
-     * 取消单个任务（支持取消正在运行的任务）
-     */
-    cancelTask(id: string) {
-        const task = this.tasks.find(t => t.id === id);
-        if (!task) return;
-
-        if (task.status === 'pending') {
-            task.status = 'cancelled';
-            this.notifyStatusChange(task);
-        } else if (task.status === 'running' && task.abortController) {
-            // 🆕 取消正在运行的任务
-            task.abortController.abort();
-        }
-    }
-
-    /**
-     * 🆕 取消指定批次的所有任务
-     */
-    cancelBatch(ids: Set<string>) {
-        ids.forEach(id => this.cancelTask(id));
-    }
-
-    /**
-     * 🆕 取消所有任务（包括正在运行的）
-     */
-    cancelAll() {
-        this.isCancelled = true;
-        this.tasks.forEach(t => {
-            if (t.status === 'pending') {
-                t.status = 'cancelled';
-            } else if (t.status === 'running' && t.abortController) {
-                t.abortController.abort();
-            }
-        });
-        // 解除所有等待中的批次
-        this.batchResolvers.forEach(resolver => {
-            const tasks = this.tasks.filter(t => resolver.ids.has(t.id));
-            resolver.resolve(tasks);
-        });
-        this.batchResolvers = [];
-    }
-
-    /**
-     * 🆕 重试失败的任务
-     */
-    retryFailed(ids?: Set<string>) {
-        const targetIds = ids || new Set(this.tasks.filter(t => t.status === 'failed').map(t => t.id));
-        targetIds.forEach(id => {
-            const task = this.tasks.find(t => t.id === id);
-            if (task && task.status === 'failed') {
-                task.status = 'pending';
-                task.error = undefined;
-                task.retryCount = 0;
-                this.notifyStatusChange(task);
-            }
-        });
-        this.process();
-    }
-
-    /**
-     * 清空队列
-     */
-    clear() {
-        this.cancelAll();
-        this.tasks = [];
-        this.runningCount = 0;
-        this.isCancelled = false;  // 重置取消标志
-    }
-
-    /**
-     * 🆕 重置队列（清空并重置状态）
-     */
-    reset() {
-        this.clear();
-        this.isPaused = false;
-    }
-
-    /**
-     * 获取所有任务
-     */
-    getTasks(): Task[] {
-        return [...this.tasks];
-    }
-
-    /**
-     * 获取任务状态
-     */
-    getTaskStatus(id: string): TaskStatus | undefined {
-        return this.tasks.find(t => t.id === id)?.status;
-    }
-
-    /**
-     * 通知状态变更
-     */
-    private async notifyStatusChange(task: Task) {
-        try {
-            await this.options.onTaskStatusChange?.(task);
-        } catch (e) {
-            console.error('[RequestQueue] onTaskStatusChange error:', e);
-        }
-        this.checkBatchResolvers();
-    }
-
-    /**
-     * 暂停/恢复
-     */
-    pause() { this.isPaused = true; }
-    resume() {
-        this.isPaused = false;
-        this.process();
-    }
-
-    /**
-     * 获取统计
-     */
-    getStats() {
-        return {
-            total: this.tasks.length,
-            pending: this.tasks.filter(t => t.status === 'pending').length,
-            running: this.tasks.filter(t => t.status === 'running').length,
-            completed: this.tasks.filter(t => t.status === 'completed').length,
-            failed: this.tasks.filter(t => t.status === 'failed').length,
-            cancelled: this.tasks.filter(t => t.status === 'cancelled').length
-        };
-    }
+    this.processQueue();
+  }
 }
+
+export default RequestQueue;

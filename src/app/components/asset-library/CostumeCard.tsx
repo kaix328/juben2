@@ -1,11 +1,12 @@
 import { memo } from 'react';
 import {
     Shirt, Trash2, CheckSquare, Square, Wand2,
-    RotateCw, Edit
+    RotateCw
 } from 'lucide-react';
 import { Card, CardContent } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
+import { ClickableImage } from '../ImagePreviewDialog';
 import type { Costume } from '../../types';
 
 interface CostumeCardProps {
@@ -44,15 +45,16 @@ export const CostumeCard = memo(({
             )}
             <div className="aspect-square bg-gray-100 relative overflow-hidden flex items-center justify-center">
                 {costume.preview ? (
-                    <img
+                    <ClickableImage
                         src={costume.preview}
                         alt={costume.name}
                         className="w-full h-full object-cover"
+                        containerClassName="w-full h-full"
                     />
                 ) : (
-                    <Shirt className="w-12 h-12 text-gray-300" />
+                    <Shirt className="w-8 h-8 text-gray-300" />
                 )}
-                <div className="absolute inset-0 bg-black opacity-0 group-hover:opacity-10 transition-opacity" />
+                <div className="absolute inset-0 bg-black opacity-0 group-hover:opacity-10 transition-opacity pointer-events-none" />
             </div>
             <CardContent className="p-3">
                 <div className="flex justify-between items-start mb-1">

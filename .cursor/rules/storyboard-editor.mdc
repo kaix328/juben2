@@ -1,0 +1,171 @@
+# 分镜制作模块 Skills
+
+## 模块概述
+分镜制作模块是项目的核心功能，负责将剧本转换为可视化分镜，支持AI图像生成和视频提示词生成。
+
+## 核心文件
+- `src/app/pages/StoryboardEditor/index.tsx` - 分镜编辑器主组件
+- `src/app/pages/StoryboardEditor/hooks/` - 各功能Hook
+- `src/app/pages/StoryboardEditor/components/` - 子组件
+- `src/app/components/storyboard/` - 通用分镜组件
+- `src/app/types/storyboard.ts` - 分镜类型定义
+
+## 功能实现
+
+### 1. AI分镜提取
+```typescript
+// 位置: hooks/useStoryboardData.ts
+// 功能：从剧本自动生成分镜面板
+// 支持密度模式：sparse(稀疏) / normal(正常) / dense(密集)
+handleAIExtractByEpisode(episode, densityMode, onStart, onEnd)
+```
+
+### 2. 分镜面板数据结构
+```typescript
+interface StoryboardPanel {
+  id: string;
+  panelNumber: number;
+  sceneId: string;
+  description: string;        // 画面描述
+  dialogue?: string;          // 对白
+  shot: string;               // 景别
+  angle: string;              // 角度
+  cameraMovement?: string;    // 镜头运动
+  duration?: number;          // 时长(秒)
+  characters: string[];       // 角色
+  props: string[];            // 道具
+  notes: string;              // 备注
+  
+  // AI相关
+  aiPrompt?: string;          // AI绘画提示词
+  aiVideoPrompt?: string;     // AI视频提示词
+  generatedImage?: string;    // 生成的图片URL
+  
+  // 专业字段
+  shotSize?: ShotSize;        // 专业景别代码
+  cameraAngle?: CameraAngleType;
+  movementType?: CameraMovementType;
+  lens?: string;              // 镜头焦距
+  lighting?: LightingDesign;  // 灯光设计
+  
+  // 视频增强字段
+  startFrame?: string;        // 起始帧描述
+  endFrame?: string;          // 结束帧描述
+  motionSpeed?: 'slow' | 'normal' | 'fast' | 'timelapse';
+  aspectRatio?: '16:9' | '9:16' | '1:1' | '4:3' | '21:9';
+}
+```
+
+### 3. 专业景别类型
+```typescript
+type ShotSize =
+  | 'ECU'    // 大特写 - 眼睛、嘴唇等局部
+  | 'CU'     // 特写 - 面部
+  | 'MCU'    // 中近景 - 头肩
+  | 'MS'     // 中景 - 腰部以上
+  | 'MWS'    // 中全景 - 膝盖以上
+  | 'WS'     // 全景 - 全身
+  | 'EWS'    // 远景 - 环境建立
+  | 'POV'    // 主观镜头
+  | 'OTS'    // 过肩镜头
+  | 'TWO'    // 双人镜头
+  | 'GROUP'  // 群戏镜头
+  | 'INSERT' // 插入镜头
+  | 'AERIAL' // 航拍镜头
+```
+
+### 4. 镜头运动类型
+```typescript
+type CameraMovementType =
+  | 'STATIC'     // 静止
+  | 'PAN_L/R'    // 横摇
+  | 'TILT_UP/DOWN' // 纵摇
+  | 'DOLLY_IN/OUT' // 推拉
+  | 'TRACK_L/R'  // 跟踪
+  | 'CRANE_UP/DOWN' // 升降
+  | 'ZOOM_IN/OUT' // 变焦
+  | 'HANDHELD'   // 手持
+  | 'STEADICAM'  // 斯坦尼康
+  | 'WHIP'       // 甩镜头
+  | 'ARC'        // 弧形运动
+  | 'FOLLOW'     // 跟随
+```
+
+## 组件结构
+
+```
+StoryboardEditor/
+├── index.tsx                    # 主组件
+├── types.ts                     # 本地类型
+├── presets.ts                   # 预设配置
+├── components/
+│   ├── DraggablePanelList.tsx   # 可拖拽面板列表
+│   ├── TimelineView.tsx         # 时间轴视图
+│   ├── ResourceSidebar.tsx      # 资源库侧边栏
+│   ├── PreviewDialog.tsx        # 预览播放对话框
+│   ├── VersionHistoryDialog.tsx # 版本历史
+│   └── StoryboardPrintTemplate.tsx # 打印模板
+└── hooks/
+    ├── useStoryboardData.ts     # 数据管理
+    ├── useStoryboardUI.ts       # UI状态
+    ├── useStoryboardActions.ts  # 操作逻辑
+    ├── useStoryboardHistory.ts  # 撤销/重做
+    ├── useFilteredPanels.ts     # 面板筛选
+    └── useKeyboardShortcuts.ts  # 快捷键
+```
+
+## 视图模式
+
+1. **列表视图** (`list`): 垂直列表展示
+2. **网格视图** (`grid`): 网格卡片展示
+3. **时间轴视图** (`timeline`): 时间轴展示
+
+## 批量操作
+
+```typescript
+// 位置: hooks/useStoryboardActions.ts
+// 功能：
+handleBatchRegeneratePrompts()  // 批量重新生成提示词
+handleGenerateAllImages()       // 批量生成图片
+handleBatchDelete()             // 批量删除
+handleBatchApplyParams()        // 批量应用参数
+```
+
+## 导出功能
+
+- 导出分镜表 (JSON)
+- 导出提示词 (TXT)
+- 导出PDF (打印格式)
+- 同步到项目库
+
+## 快捷键支持
+
+| 快捷键 | 功能 |
+|--------|------|
+| `Ctrl+Z` | 撤销 |
+| `Ctrl+Y` | 重做 |
+| `Ctrl+S` | 保存 |
+| `Ctrl+A` | 全选 |
+| `Delete` | 删除选中 |
+| `Escape` | 清除选择 |
+
+## 版本历史
+
+- 支持保存版本快照
+- 支持恢复历史版本
+- 支持删除版本
+- 自动保存间隔: 30秒
+
+## 开发规范
+
+1. **面板编号**: 自动维护连续编号
+2. **拖拽排序**: 使用 DnD Kit 实现
+3. **图片生成**: 使用队列管理，支持取消和重试
+4. **状态追踪**: 每个面板有独立的生成状态
+
+## 注意事项
+
+- 分镜面板支持复制和拆分
+- 资源库侧边栏可折叠
+- 底部操作栏固定显示
+- 支持预览播放功能

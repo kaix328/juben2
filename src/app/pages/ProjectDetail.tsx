@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useParams, Link } from 'react-router-dom';
 import { Plus, FileText, Film, Layers, Library, BarChart3, Palette } from 'lucide-react';
+import { useRoutePrefetch } from '../hooks/useRoutePrefetch';
 import { Skeleton } from '../components/ui/skeleton';
 import { EmptyState } from '../components/ui/empty-state';
 import { projectStorage, chapterStorage, generateId } from '../utils/storage';
@@ -24,6 +25,7 @@ import {
 
 export function ProjectDetail() {
   const { projectId } = useParams<{ projectId: string }>();
+  const { prefetchChapterEditor } = useRoutePrefetch();
 
   const project = useLiveQuery(
     () => projectId ? projectStorage.getById(projectId) : Promise.resolve(undefined),
@@ -178,19 +180,37 @@ export function ProjectDetail() {
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <Link to={`/projects/${projectId}/chapter/${chapter.id}`}>
+                    <Link 
+                      to={`/projects/${projectId}/chapter/${chapter.id}`}
+                      onMouseEnter={() => {
+                        // 预加载章节数据（原文编辑可能也需要剧本数据）
+                        prefetchChapterEditor(chapter.id);
+                      }}
+                    >
                       <Button variant="outline" size="sm" className="w-full gap-2 hover:border-purple-300 hover:bg-purple-50 hover:text-purple-700">
                         <FileText className="w-4 h-4" />
                         原文编辑
                       </Button>
                     </Link>
-                    <Link to={`/projects/${projectId}/script/${chapter.id}`}>
+                    <Link 
+                      to={`/projects/${projectId}/script/${chapter.id}`}
+                      onMouseEnter={() => {
+                        // 预加载剧本编辑器数据
+                        prefetchChapterEditor(chapter.id);
+                      }}
+                    >
                       <Button variant="outline" size="sm" className="w-full gap-2 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700">
                         <Film className="w-4 h-4" />
                         剧本改写
                       </Button>
                     </Link>
-                    <Link to={`/projects/${projectId}/storyboard/${chapter.id}`}>
+                    <Link 
+                      to={`/projects/${projectId}/storyboard/${chapter.id}`}
+                      onMouseEnter={() => {
+                        // 预加载分镜编辑器数据
+                        prefetchChapterEditor(chapter.id);
+                      }}
+                    >
                       <Button variant="outline" size="sm" className="w-full gap-2 hover:border-green-300 hover:bg-green-50 hover:text-green-700">
                         <Layers className="w-4 h-4" />
                         分镜制作

@@ -6,6 +6,7 @@ import {
 import { Card, CardContent } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
+import { BlobImage } from '../LazyImage';
 import type { Character } from '../../types';
 
 interface CharacterCardProps {
@@ -15,9 +16,9 @@ interface CharacterCardProps {
     isBatchMode: boolean;
     usageCount: number;
     onSelect: (id: string) => void;
-    onDelete: (id: string) => void;
-    onGenerateFullBody: (id: string) => void;
-    onGenerateFace: (id: string) => void;
+    onDelete: (id: string, e?: React.MouseEvent) => void;
+    onGenerateFullBody: (id: string, e?: React.MouseEvent) => void;
+    onGenerateFace: (id: string, e?: React.MouseEvent) => void;
 }
 
 export const CharacterCard = memo(({
@@ -48,13 +49,13 @@ export const CharacterCard = memo(({
             )}
             <div className="aspect-square bg-gray-100 relative overflow-hidden flex items-center justify-center">
                 {character.facePreview || character.fullBodyPreview ? (
-                    <img
-                        src={character.facePreview || character.fullBodyPreview}
+                    <BlobImage
+                        blobId={character.facePreview || character.fullBodyPreview}
                         alt={character.name}
                         className="w-full h-full object-cover"
                     />
                 ) : (
-                    <Users className="w-12 h-12 text-gray-300" />
+                    <Users className="w-8 h-8 text-gray-300" />
                 )}
                 <div className="absolute inset-0 bg-black opacity-0 group-hover:opacity-10 transition-opacity" />
                 <div className="absolute bottom-2 right-2">
@@ -72,7 +73,7 @@ export const CharacterCard = memo(({
                         className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-700 hover:bg-red-50"
                         onClick={(e) => {
                             e.stopPropagation();
-                            onDelete(character.id);
+                            onDelete(character.id, e);
                         }}
                     >
                         <Trash2 className="w-4 h-4" />
@@ -102,7 +103,7 @@ export const CharacterCard = memo(({
                         disabled={character.isGeneratingFullBody}
                         onClick={(e) => {
                             e.stopPropagation();
-                            onGenerateFullBody(character.id);
+                            onGenerateFullBody(character.id, e);
                         }}
                     >
                         {character.isGeneratingFullBody ? (
@@ -119,7 +120,7 @@ export const CharacterCard = memo(({
                         disabled={character.isGeneratingFace}
                         onClick={(e) => {
                             e.stopPropagation();
-                            onGenerateFace(character.id);
+                            onGenerateFace(character.id, e);
                         }}
                     >
                         {character.isGeneratingFace ? (

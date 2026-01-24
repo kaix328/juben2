@@ -7,7 +7,7 @@
 export { devLog, callWithRetry, checkCharacterConsistency } from './utils';
 
 // 剧本提取
-export { extractScript, type ScriptMode } from './scriptExtractor';
+export { extractScript, extractScriptInChunks, extractScriptGenerator, type ScriptMode } from './scriptExtractor';
 
 // 分镜后处理
 export { smartFillPanel } from './panelProcessor';
@@ -20,3 +20,6 @@ export { generateStoryboardImage } from './imageGenerator';
 
 // 资产提取
 export { extractAssets, type ExtractedAssets } from './assetExtractor';
+
+// 故事五元素分析
+export { StoryAnalyzer, analyzeStoryFiveElements, formatFiveElementsReport } from './storyAnalyzer';

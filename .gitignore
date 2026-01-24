@@ -6,3 +6,34 @@ build_output.txt
 build_debug.txt
 .DS_Store
 Thumbs.db
+
+# Build outputs
+dist/
+build/
+
+# Test coverage
+coverage/
+
+# Logs
+logs/
+*.log
+
+# Environment variables
+.env
+.env.production
+.env.development
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Reports
+deployment-verification-report.json
+diagnostic-report.json
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini

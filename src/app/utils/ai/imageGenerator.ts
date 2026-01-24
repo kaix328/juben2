@@ -3,7 +3,7 @@
  * 从 aiService.ts 拆分
  */
 import type { StoryboardPanel, Character, Scene, DirectorStyle } from '../../types';
-import { generateStoryboardImagePrompt } from '../promptGenerator';
+import { generateStoryboardImagePrompt } from '../prompts';
 import { optimizePrompt, callDoubaoImage } from '../volcApi';
 import { IMAGE_SIZES } from '../../constants/imageSizes';
 

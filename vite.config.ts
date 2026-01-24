@@ -4,7 +4,10 @@ import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
-  base: '/juben/',
+  // 使用环境变量控制base路径，默认为根路径
+  // Docker部署: VITE_BASE_PATH=/
+  // GitHub Pages: VITE_BASE_PATH=/juben/
+  base: process.env.VITE_BASE_PATH || '/',
   plugins: [
     // The React and Tailwind plugins are both required for Make, even if
     // Tailwind is not being actively used – do not remove them
@@ -12,8 +15,8 @@ export default defineConfig({
     tailwindcss(),
   ],
   build: {
-    minify: false,
-    cssMinify: false,
+    minify: 'esbuild',
+    cssMinify: true,
     sourcemap: false,
     rollupOptions: {
       output: {
@@ -24,6 +27,10 @@ export default defineConfig({
         },
       },
     },
+  },
+  esbuild: {
+    // 生产环境移除 console 和 debugger
+    drop: process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : [],
   },
   resolve: {
     alias: {
