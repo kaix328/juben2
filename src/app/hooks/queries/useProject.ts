@@ -19,7 +19,8 @@ export function useProject(projectId: string | undefined) {
     queryKey: queryKeys.project.detail(projectId || ''),
     queryFn: async () => {
       if (!projectId) return null;
-      return await projectStorage.getById(projectId);
+      const project = await projectStorage.getById(projectId);
+      return project ?? null;
     },
     enabled: !!projectId,
     staleTime: 10 * 60 * 1000, // 项目数据变化较少，可以缓存更久
@@ -36,7 +37,8 @@ export function useProjectByChapter(chapterId: string | undefined) {
       if (!chapterId) return null;
       const projectId = await chapterStorage.getProjectIdByChapterId(chapterId);
       if (!projectId) return null;
-      return await projectStorage.getById(projectId);
+      const project = await projectStorage.getById(projectId);
+      return project ?? null;
     },
     enabled: !!chapterId,
     staleTime: 10 * 60 * 1000,
@@ -50,7 +52,8 @@ export function useProjects() {
   return useQuery({
     queryKey: queryKeys.project.list(),
     queryFn: async () => {
-      return await projectStorage.getAll();
+      const projects = await projectStorage.getAll();
+      return projects ?? [];
     },
     staleTime: 5 * 60 * 1000,
   });

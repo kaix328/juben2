@@ -115,7 +115,8 @@ export function useStoryboards() {
   return useQuery({
     queryKey: queryKeys.storyboard.all,
     queryFn: async () => {
-      return await storyboardStorage.getAll();
+      const storyboards = await storyboardStorage.getAll();
+      return storyboards ?? [];
     },
     staleTime: 10 * 60 * 1000, // 10 分钟
   });
@@ -131,7 +132,10 @@ export function usePrefetchStoryboard() {
   return async (chapterId: string) => {
     await queryClient.prefetchQuery({
       queryKey: queryKeys.storyboard.byChapter(chapterId),
-      queryFn: () => storyboardStorage.getByChapterId(chapterId),
+      queryFn: async () => {
+        const storyboard = await storyboardStorage.getByChapterId(chapterId);
+        return storyboard ?? null;
+      },
     });
   };
 }
