@@ -954,6 +954,112 @@ export class PromptEngine {
     // 音效氛围 (新增)
     if (panel.soundEffects && panel.soundEffects.length > 0) {
       parts.push({ type: 'mood', value: `【音效氛围】${panel.soundEffects.slice(0, 3).join('、')}`, language: 'zh' });
+
+    // 🆕 道具 (Props)
+    if (panel.props && panel.props.length > 0) {
+      const validProps = panel.props.filter(p => p && p.trim());
+      if (validProps.length > 0) {
+        parts.push({ type: 'appearance', value: `【道具】${validProps.join('、')}`, language: 'zh' });
+        parts.push({ type: 'appearance', value: `props: ${validProps.join(', ')}`, language: 'en' });
+      }
+    }
+
+    // 🆕 灯光氛围 (Lighting)
+    if (panel.lighting) {
+      if (panel.lighting.mood) {
+        parts.push({
+          type: 'lighting',
+          value: `【灯光氛围】${panel.lighting.mood}`,
+          language: 'zh',
+        });
+      }
+      const lightingDetails: string[] = [];
+      if (panel.lighting.keyLight) {
+        lightingDetails.push(`key light: ${panel.lighting.keyLight}`);
+      }
+      if (panel.lighting.fillLight) {
+        lightingDetails.push(`fill light: ${panel.lighting.fillLight}`);
+      }
+      if (panel.lighting.backLight) {
+        lightingDetails.push(`back light: ${panel.lighting.backLight}`);
+      }
+      if (panel.lighting.practicalLights && panel.lighting.practicalLights.length > 0) {
+        lightingDetails.push(`practical lights: ${panel.lighting.practicalLights.join(', ')}`);
+      }
+      if (lightingDetails.length > 0) {
+        parts.push({
+          type: 'lighting',
+          value: lightingDetails.join(', '),
+          language: 'en',
+        });
+      }
+    }
+
+    // 🆕 特效 (VFX)
+    if (panel.vfx && panel.vfx.length > 0) {
+      parts.push({
+        type: 'appearance',
+        value: `【视觉特效】${panel.vfx.join('、')}`,
+        language: 'zh',
+      });
+      parts.push({
+        type: 'appearance',
+        value: `visual effects: ${panel.vfx.join(', ')}`,
+        language: 'en',
+      });
+    }
+
+    // 🆕 运动速度 (Motion Speed)
+    if (panel.motionSpeed) {
+      const speedMap: Record<string, { zh: string; en: string }> = {
+        'slow': { zh: '慢动作', en: 'slow motion, 0.5x speed' },
+        'normal': { zh: '正常速度', en: 'normal speed, real-time' },
+        'fast': { zh: '快动作', en: 'fast motion, 2x speed' },
+        'timelapse': { zh: '延时摄影', en: 'time-lapse, accelerated motion' },
+      };
+      const speedDesc = speedMap[panel.motionSpeed];
+      if (speedDesc) {
+        parts.push({ type: 'technical', value: `【运动速度】${speedDesc.zh}`, language: 'zh' });
+        parts.push({ type: 'technical', value: speedDesc.en, language: 'en' });
+      }
+    }
+
+    // 🆕 音乐 (Music)
+    if (panel.music) {
+      parts.push({
+        type: 'mood',
+        value: `【背景音乐】${panel.music}`,
+        language: 'zh',
+      });
+      parts.push({
+        type: 'mood',
+        value: `background music: ${panel.music}`,
+        language: 'en',
+      });
+    }
+
+    // 🆕 宽高比 (Aspect Ratio)
+    if (panel.aspectRatio) {
+      parts.push({
+        type: 'technical',
+        value: `【宽高比】${panel.aspectRatio}`,
+        language: 'zh',
+      });
+      parts.push({
+        type: 'technical',
+        value: `aspect ratio ${panel.aspectRatio}`,
+        language: 'en',
+      });
+    }
+
+    // 🆕 对白 (Dialogue)
+    if (panel.dialogue) {
+      parts.push({
+        type: 'appearance',
+        value: `【对白】${panel.dialogue}`,
+        language: 'zh',
+      });
+    }
     }
 
     // 起始帧 / 结束帧
