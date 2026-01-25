@@ -19,7 +19,9 @@ export function useAssets(projectId: string | undefined) {
     queryKey: queryKeys.assets.byProject(projectId || ''),
     queryFn: async () => {
       if (!projectId) return null;
-      return await assetStorage.getByProjectId(projectId);
+      const assets = await assetStorage.getByProjectId(projectId);
+      // 确保返回值不是 undefined
+      return assets ?? null;
     },
     enabled: !!projectId,
     staleTime: 10 * 60 * 1000,
@@ -36,7 +38,9 @@ export function useAssetsByChapter(chapterId: string | undefined) {
       if (!chapterId) return null;
       const projectId = await chapterStorage.getProjectIdByChapterId(chapterId);
       if (!projectId) return null;
-      return await assetStorage.getByProjectId(projectId);
+      const assets = await assetStorage.getByProjectId(projectId);
+      // 确保返回值不是 undefined
+      return assets ?? null;
     },
     enabled: !!chapterId,
     staleTime: 10 * 60 * 1000,
