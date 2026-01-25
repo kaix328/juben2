@@ -954,6 +954,7 @@ export class PromptEngine {
     // 音效氛围 (新增)
     if (panel.soundEffects && panel.soundEffects.length > 0) {
       parts.push({ type: 'mood', value: `【音效氛围】${panel.soundEffects.slice(0, 3).join('、')}`, language: 'zh' });
+    }
 
     // 🆕 道具 (Props)
     if (panel.props && panel.props.length > 0) {
@@ -1059,7 +1060,6 @@ export class PromptEngine {
         value: `【对白】${panel.dialogue}`,
         language: 'zh',
       });
-    }
     }
 
     // 起始帧 / 结束帧
