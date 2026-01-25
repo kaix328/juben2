@@ -1,442 +1,366 @@
 /**
  * 性能监控工具
- * 集成 Web Vitals 监控核心性能指标
+ * 用于监控组件渲染性能和应用性能指标
  */
 
-// ============ 类型定义 ============
+import { captureMessage } from '../../lib/sentry';
+import { CONFIG } from '../config/constants';
+import * as React from 'react';
 
-export interface PerformanceMetric {
-  name: string;
-  value: number;
-  rating: 'good' | 'needs-improvement' | 'poor';
-  timestamp: number;
-}
-
-export interface PerformanceReport {
-  // Core Web Vitals
-  LCP?: PerformanceMetric; // Largest Contentful Paint
-  FID?: PerformanceMetric; // First Input Delay
-  CLS?: PerformanceMetric; // Cumulative Layout Shift
-  
-  // Other metrics
-  FCP?: PerformanceMetric; // First Contentful Paint
-  TTFB?: PerformanceMetric; // Time to First Byte
-  INP?: PerformanceMetric; // Interaction to Next Paint
-  
-  // Custom metrics
-  customMetrics: Record<string, number>;
-  
-  // Summary
-  timestamp: string;
-  url: string;
-  userAgent: string;
-}
-
-// ============ 评分标准 ============
-
-const THRESHOLDS = {
-  LCP: { good: 2500, poor: 4000 },
-  FID: { good: 100, poor: 300 },
-  CLS: { good: 0.1, poor: 0.25 },
-  FCP: { good: 1800, poor: 3000 },
-  TTFB: { good: 800, poor: 1800 },
-  INP: { good: 200, poor: 500 },
-};
-
-function getRating(name: string, value: number): 'good' | 'needs-improvement' | 'poor' {
-  const threshold = THRESHOLDS[name as keyof typeof THRESHOLDS];
-  if (!threshold) return 'good';
-  
-  if (value <= threshold.good) return 'good';
-  if (value <= threshold.poor) return 'needs-improvement';
-  return 'poor';
-}
-
-// ============ 性能监控类 ============
-
-class PerformanceMonitor {
-  private metrics: Map<string, PerformanceMetric> = new Map();
-  private customMetrics: Map<string, number> = new Map();
-  private observers: PerformanceObserver[] = [];
-  private isInitialized = false;
-
+/**
+ * 性能监控类
+ */
+export class PerformanceMonitor {
   /**
-   * 初始化性能监控
+   * 测量组件渲染时间
+   * 
+   * @param componentName - 组件名称
+   * @returns 清理函数，在组件卸载时调用
+   * 
+   * @example
+   * ```tsx
+   * useEffect(() => {
+   *   const cleanup = PerformanceMonitor.measureRender('MyComponent');
+   *   return cleanup;
+   * });
+   * ```
    */
-  init() {
-    if (this.isInitialized) return;
-    if (typeof window === 'undefined') return;
+  static measureRender(componentName: string): () => void {
+    if (!CONFIG.DEV.ENABLE_PERFORMANCE_MONITOR) {
+      return () => {};
+    }
 
-    this.isInitialized = true;
-
-    // 监控 LCP (Largest Contentful Paint)
-    this.observeLCP();
-
-    // 监控 FID (First Input Delay)
-    this.observeFID();
-
-    // 监控 CLS (Cumulative Layout Shift)
-    this.observeCLS();
-
-    // 监控 FCP (First Contentful Paint)
-    this.observeFCP();
-
-    // 监控 TTFB (Time to First Byte)
-    this.observeTTFB();
-
-    // 监控 INP (Interaction to Next Paint)
-    this.observeINP();
-
-    console.log('[Performance] 性能监控已启动');
-  }
-
-  /**
-   * 监控 LCP
-   */
-  private observeLCP() {
-    try {
-      const observer = new PerformanceObserver((list) => {
-        const entries = list.getEntries();
-        const lastEntry = entries[entries.length - 1] as any;
+    const startTime = performance.now();
+    
+    return () => {
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+      
+      // 超过一帧（16ms）时发出警告
+      if (duration > CONFIG.PERFORMANCE.MAX_RENDER_TIME) {
+        console.warn(
+          `[Performance] ${componentName} 渲染耗时: ${duration.toFixed(2)}ms`,
+          {
+            component: componentName,
+            duration,
+            threshold: CONFIG.PERFORMANCE.MAX_RENDER_TIME,
+          }
+        );
         
-        if (lastEntry) {
-          this.recordMetric('LCP', lastEntry.renderTime || lastEntry.loadTime);
+        // 生产环境上报到 Sentry
+        if (import.meta.env.PROD) {
+          captureMessage(
+            `Slow render: ${componentName} (${duration.toFixed(2)}ms)`,
+            'warning'
+          );
         }
-      });
-
-      observer.observe({ type: 'largest-contentful-paint', buffered: true });
-      this.observers.push(observer);
-    } catch (e) {
-      console.warn('[Performance] LCP 监控不可用');
-    }
-  }
-
-  /**
-   * 监控 FID
-   */
-  private observeFID() {
-    try {
-      const observer = new PerformanceObserver((list) => {
-        const entries = list.getEntries();
-        entries.forEach((entry: any) => {
-          this.recordMetric('FID', entry.processingStart - entry.startTime);
-        });
-      });
-
-      observer.observe({ type: 'first-input', buffered: true });
-      this.observers.push(observer);
-    } catch (e) {
-      console.warn('[Performance] FID 监控不可用');
-    }
-  }
-
-  /**
-   * 监控 CLS
-   */
-  private observeCLS() {
-    try {
-      let clsValue = 0;
-      const observer = new PerformanceObserver((list) => {
-        const entries = list.getEntries();
-        entries.forEach((entry: any) => {
-          if (!entry.hadRecentInput) {
-            clsValue += entry.value;
-            this.recordMetric('CLS', clsValue);
-          }
-        });
-      });
-
-      observer.observe({ type: 'layout-shift', buffered: true });
-      this.observers.push(observer);
-    } catch (e) {
-      console.warn('[Performance] CLS 监控不可用');
-    }
-  }
-
-  /**
-   * 监控 FCP
-   */
-  private observeFCP() {
-    try {
-      const observer = new PerformanceObserver((list) => {
-        const entries = list.getEntries();
-        entries.forEach((entry: any) => {
-          if (entry.name === 'first-contentful-paint') {
-            this.recordMetric('FCP', entry.startTime);
-          }
-        });
-      });
-
-      observer.observe({ type: 'paint', buffered: true });
-      this.observers.push(observer);
-    } catch (e) {
-      console.warn('[Performance] FCP 监控不可用');
-    }
-  }
-
-  /**
-   * 监控 TTFB
-   */
-  private observeTTFB() {
-    try {
-      const observer = new PerformanceObserver((list) => {
-        const entries = list.getEntries();
-        entries.forEach((entry: any) => {
-          if (entry.responseStart > 0) {
-            this.recordMetric('TTFB', entry.responseStart);
-          }
-        });
-      });
-
-      observer.observe({ type: 'navigation', buffered: true });
-      this.observers.push(observer);
-    } catch (e) {
-      console.warn('[Performance] TTFB 监控不可用');
-    }
-  }
-
-  /**
-   * 监控 INP (Interaction to Next Paint)
-   */
-  private observeINP() {
-    try {
-      let maxDuration = 0;
-      const observer = new PerformanceObserver((list) => {
-        const entries = list.getEntries();
-        entries.forEach((entry: any) => {
-          if (entry.duration > maxDuration) {
-            maxDuration = entry.duration;
-            this.recordMetric('INP', entry.duration);
-          }
-        });
-      });
-
-      observer.observe({ type: 'event', buffered: true, durationThreshold: 16 });
-      this.observers.push(observer);
-    } catch (e) {
-      console.warn('[Performance] INP 监控不可用');
-    }
-  }
-
-  /**
-   * 记录指标
-   */
-  private recordMetric(name: string, value: number) {
-    const metric: PerformanceMetric = {
-      name,
-      value: Math.round(value * 100) / 100,
-      rating: getRating(name, value),
-      timestamp: Date.now(),
+      }
     };
-
-    this.metrics.set(name, metric);
-
-    // 输出到控制台
-    const emoji = metric.rating === 'good' ? '✅' : metric.rating === 'needs-improvement' ? '⚠️' : '❌';
-    console.log(`[Performance] ${emoji} ${name}: ${metric.value.toFixed(2)}ms (${metric.rating})`);
-
-    // 触发自定义事件
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('performance-metric', { detail: metric }));
-    }
-  }
-
-  /**
-   * 记录自定义指标
-   */
-  recordCustomMetric(name: string, value: number) {
-    this.customMetrics.set(name, value);
-    console.log(`[Performance] 📊 ${name}: ${value}`);
   }
 
   /**
    * 测量函数执行时间
+   * 
+   * @param fnName - 函数名称
+   * @param fn - 要测量的函数
+   * @returns 包装后的函数
+   * 
+   * @example
+   * ```ts
+   * const optimizedFn = PerformanceMonitor.measureFunction('processData', processData);
+   * ```
    */
-  async measure<T>(name: string, fn: () => T | Promise<T>): Promise<T> {
-    const start = performance.now();
-    try {
-      const result = await fn();
-      const duration = performance.now() - start;
-      this.recordCustomMetric(name, duration);
-      return result;
-    } catch (error) {
-      const duration = performance.now() - start;
-      this.recordCustomMetric(`${name} (error)`, duration);
-      throw error;
+  static measureFunction<T extends (...args: any[]) => any>(
+    fnName: string,
+    fn: T
+  ): T {
+    if (!CONFIG.DEV.ENABLE_PERFORMANCE_MONITOR) {
+      return fn;
     }
+
+    return ((...args: Parameters<T>) => {
+      const startTime = performance.now();
+      const result = fn(...args);
+      const duration = performance.now() - startTime;
+      
+      if (duration > 100) { // 超过100ms
+        console.warn(
+          `[Performance] ${fnName} 执行耗时: ${duration.toFixed(2)}ms`
+        );
+      }
+      
+      return result;
+    }) as T;
   }
 
   /**
-   * 标记时间点
+   * 测量异步函数执行时间
+   * 
+   * @param fnName - 函数名称
+   * @param fn - 要测量的异步函数
+   * @returns 包装后的异步函数
    */
-  mark(name: string) {
-    if (typeof performance !== 'undefined' && performance.mark) {
-      performance.mark(name);
+  static measureAsyncFunction<T extends (...args: any[]) => Promise<any>>(
+    fnName: string,
+    fn: T
+  ): T {
+    if (!CONFIG.DEV.ENABLE_PERFORMANCE_MONITOR) {
+      return fn;
+    }
+
+    return (async (...args: Parameters<T>) => {
+      const startTime = performance.now();
+      try {
+        const result = await fn(...args);
+        const duration = performance.now() - startTime;
+        
+        if (duration > 1000) { // 超过1秒
+          console.warn(
+            `[Performance] ${fnName} 异步执行耗时: ${duration.toFixed(2)}ms`
+          );
+        }
+        
+        return result;
+      } catch (error) {
+        const duration = performance.now() - startTime;
+        console.error(
+          `[Performance] ${fnName} 执行失败，耗时: ${duration.toFixed(2)}ms`,
+          error
+        );
+        throw error;
+      }
+    }) as T;
+  }
+
+  /**
+   * 标记性能时间点
+   * 
+   * @param markName - 标记名称
+   */
+  static mark(markName: string): void {
+    if (!CONFIG.DEV.ENABLE_PERFORMANCE_MONITOR) return;
+    
+    try {
+      performance.mark(markName);
+    } catch (error) {
+      console.error('[Performance] Failed to mark:', error);
     }
   }
 
   /**
    * 测量两个标记之间的时间
+   * 
+   * @param measureName - 测量名称
+   * @param startMark - 开始标记
+   * @param endMark - 结束标记
+   * @returns 持续时间（毫秒）
    */
-  measureBetween(name: string, startMark: string, endMark: string) {
-    if (typeof performance !== 'undefined' && performance.measure) {
-      try {
-        performance.measure(name, startMark, endMark);
-        const measure = performance.getEntriesByName(name)[0];
-        if (measure) {
-          this.recordCustomMetric(name, measure.duration);
-        }
-      } catch (e) {
-        console.warn(`[Performance] 无法测量 ${name}`);
+  static measure(
+    measureName: string,
+    startMark: string,
+    endMark: string
+  ): number | null {
+    if (!CONFIG.DEV.ENABLE_PERFORMANCE_MONITOR) return null;
+    
+    try {
+      performance.measure(measureName, startMark, endMark);
+      const measure = performance.getEntriesByName(measureName)[0];
+      
+      if (measure) {
+        console.log(
+          `[Performance] ${measureName}: ${measure.duration.toFixed(2)}ms`
+        );
+        return measure.duration;
       }
+    } catch (error) {
+      console.error('[Performance] Failed to measure:', error);
+    }
+    
+    return null;
+  }
+
+  /**
+   * 获取页面性能指标
+   * 
+   * @returns 性能指标对象
+   */
+  static getPageMetrics(): {
+    fcp?: number; // First Contentful Paint
+    lcp?: number; // Largest Contentful Paint
+    fid?: number; // First Input Delay
+    cls?: number; // Cumulative Layout Shift
+    ttfb?: number; // Time to First Byte
+  } {
+    const metrics: any = {};
+
+    try {
+      // FCP
+      const fcpEntry = performance.getEntriesByName('first-contentful-paint')[0];
+      if (fcpEntry) {
+        metrics.fcp = fcpEntry.startTime;
+      }
+
+      // Navigation Timing
+      const navTiming = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
+      if (navTiming) {
+        metrics.ttfb = navTiming.responseStart - navTiming.requestStart;
+      }
+
+      // 使用 PerformanceObserver 获取 LCP, FID, CLS
+      if ('PerformanceObserver' in window) {
+        // 这些指标需要在页面加载时通过 PerformanceObserver 收集
+        // 这里只是返回已收集的数据
+      }
+    } catch (error) {
+      console.error('[Performance] Failed to get metrics:', error);
+    }
+
+    return metrics;
+  }
+
+  /**
+   * 记录长任务
+   * 
+   * @param callback - 长任务检测回调
+   */
+  static observeLongTasks(callback: (duration: number) => void): () => void {
+    if (!CONFIG.DEV.ENABLE_PERFORMANCE_MONITOR) {
+      return () => {};
+    }
+
+    if (!('PerformanceObserver' in window)) {
+      return () => {};
+    }
+
+    try {
+      const observer = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          if (entry.duration > 50) { // 超过50ms的任务
+            console.warn(
+              `[Performance] 检测到长任务: ${entry.duration.toFixed(2)}ms`,
+              entry
+            );
+            callback(entry.duration);
+          }
+        }
+      });
+
+      observer.observe({ entryTypes: ['longtask'] });
+
+      return () => observer.disconnect();
+    } catch (error) {
+      console.error('[Performance] Failed to observe long tasks:', error);
+      return () => {};
     }
   }
 
   /**
-   * 获取所有指标
+   * 监控内存使用情况
+   * 
+   * @returns 内存使用信息
    */
-  getMetrics(): PerformanceReport {
-    const report: PerformanceReport = {
-      customMetrics: Object.fromEntries(this.customMetrics),
-      timestamp: new Date().toISOString(),
-      url: typeof window !== 'undefined' ? window.location.href : '',
-      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
-    };
+  static getMemoryUsage(): {
+    usedJSHeapSize?: number;
+    totalJSHeapSize?: number;
+    jsHeapSizeLimit?: number;
+  } | null {
+    if (!CONFIG.DEV.ENABLE_PERFORMANCE_MONITOR) return null;
 
-    // 添加 Core Web Vitals
-    this.metrics.forEach((metric, name) => {
-      report[name as keyof PerformanceReport] = metric as any;
-    });
+    // @ts-ignore - performance.memory 是非标准 API
+    if (performance.memory) {
+      // @ts-ignore
+      const memory = performance.memory;
+      return {
+        usedJSHeapSize: memory.usedJSHeapSize,
+        totalJSHeapSize: memory.totalJSHeapSize,
+        jsHeapSizeLimit: memory.jsHeapSizeLimit,
+      };
+    }
 
-    return report;
+    return null;
   }
 
   /**
-   * 获取性能评分 (0-100)
+   * 记录性能日志
+   * 
+   * @param message - 日志消息
+   * @param data - 附加数据
    */
-  getScore(): number {
-    const coreMetrics = ['LCP', 'FID', 'CLS'];
-    const scores: number[] = [];
+  static log(message: string, data?: any): void {
+    if (!CONFIG.DEV.VERBOSE_LOGGING) return;
 
-    coreMetrics.forEach((name) => {
-      const metric = this.metrics.get(name);
-      if (metric) {
-        const score = metric.rating === 'good' ? 100 : metric.rating === 'needs-improvement' ? 50 : 0;
-        scores.push(score);
-      }
-    });
-
-    if (scores.length === 0) return 0;
-    return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
-  }
-
-  /**
-   * 导出报告为 JSON
-   */
-  exportReport(): string {
-    return JSON.stringify(this.getMetrics(), null, 2);
-  }
-
-  /**
-   * 清理监控
-   */
-  cleanup() {
-    this.observers.forEach((observer) => observer.disconnect());
-    this.observers = [];
-    this.metrics.clear();
-    this.customMetrics.clear();
-    this.isInitialized = false;
+    console.log(`[Performance] ${message}`, data);
   }
 }
 
-// ============ 导出单例 ============
+/**
+ * React Hook: 测量组件渲染性能
+ * 
+ * @param componentName - 组件名称
+ * 
+ * @example
+ * ```tsx
+ * function MyComponent() {
+ *   usePerformanceMonitor('MyComponent');
+ *   return <div>...</div>;
+ * }
+ * ```
+ */
+export function usePerformanceMonitor(componentName: string): void {
+  if (!CONFIG.DEV.ENABLE_PERFORMANCE_MONITOR) return;
 
-export const performanceMonitor = new PerformanceMonitor();
+  const startTime = performance.now();
 
-// ============ React Hook ============
-
-import { useEffect, useState } from 'react';
-
-export function usePerformanceMetrics() {
-  const [metrics, setMetrics] = useState<PerformanceReport | null>(null);
-  const [score, setScore] = useState<number>(0);
-
-  useEffect(() => {
-    // 初始化监控
-    performanceMonitor.init();
-
-    // 监听指标更新
-    const handleMetricUpdate = () => {
-      setMetrics(performanceMonitor.getMetrics());
-      setScore(performanceMonitor.getScore());
-    };
-
-    window.addEventListener('performance-metric', handleMetricUpdate);
-
-    // 定期更新
-    const interval = setInterval(handleMetricUpdate, 5000);
-
-    return () => {
-      window.removeEventListener('performance-metric', handleMetricUpdate);
-      clearInterval(interval);
-    };
-  }, []);
-
-  return {
-    metrics,
-    score,
-    measure: performanceMonitor.measure.bind(performanceMonitor),
-    mark: performanceMonitor.mark.bind(performanceMonitor),
-    measureBetween: performanceMonitor.measureBetween.bind(performanceMonitor),
-    recordCustomMetric: performanceMonitor.recordCustomMetric.bind(performanceMonitor),
-  };
+  // 使用 useEffect 在组件挂载和更新后测量
+  React.useEffect(() => {
+    const duration = performance.now() - startTime;
+    
+    if (duration > CONFIG.PERFORMANCE.MAX_RENDER_TIME) {
+      console.warn(
+        `[Performance] ${componentName} 渲染耗时: ${duration.toFixed(2)}ms`
+      );
+    }
+  });
 }
-
-// ============ 便捷函数 ============
 
 /**
  * 初始化性能监控
+ * 在应用启动时调用，设置全局性能监控
  */
-export function initPerformanceMonitoring() {
-  performanceMonitor.init();
-}
-
-/**
- * 测量异步操作
- */
-export async function measureAsync<T>(name: string, fn: () => Promise<T>): Promise<T> {
-  return performanceMonitor.measure(name, fn);
-}
-
-/**
- * 测量同步操作
- */
-export function measureSync<T>(name: string, fn: () => T): T {
-  const start = performance.now();
-  try {
-    const result = fn();
-    const duration = performance.now() - start;
-    performanceMonitor.recordCustomMetric(name, duration);
-    return result;
-  } catch (error) {
-    const duration = performance.now() - start;
-    performanceMonitor.recordCustomMetric(`${name} (error)`, duration);
-    throw error;
+export function initPerformanceMonitoring(): void {
+  if (!CONFIG.DEV.ENABLE_PERFORMANCE_MONITOR) {
+    console.log('[Performance] 性能监控已禁用');
+    return;
   }
+
+  console.log('[Performance] 正在初始化性能监控...');
+
+  // 监控长任务
+  PerformanceMonitor.observeLongTasks((duration) => {
+    console.warn(`[Performance] 检测到长任务: ${duration.toFixed(2)}ms`);
+  });
+
+  // 记录页面加载性能
+  if (typeof window !== 'undefined') {
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        const metrics = PerformanceMonitor.getPageMetrics();
+        console.log('[Performance] 页面性能指标:', metrics);
+        
+        // 记录内存使用
+        const memory = PerformanceMonitor.getMemoryUsage();
+        if (memory) {
+          console.log('[Performance] 内存使用:', {
+            used: `${(memory.usedJSHeapSize / 1024 / 1024).toFixed(2)} MB`,
+            total: `${(memory.totalJSHeapSize / 1024 / 1024).toFixed(2)} MB`,
+            limit: `${(memory.jsHeapSizeLimit / 1024 / 1024).toFixed(2)} MB`,
+          });
+        }
+      }, 0);
+    });
+  }
+
+  console.log('[Performance] 性能监控已初始化 ✅');
 }
 
-/**
- * 获取性能报告
- */
-export function getPerformanceReport(): PerformanceReport {
-  return performanceMonitor.getMetrics();
-}
-
-/**
- * 获取性能评分
- */
-export function getPerformanceScore(): number {
-  return performanceMonitor.getScore();
-}
-
-export default performanceMonitor;
+export default PerformanceMonitor;

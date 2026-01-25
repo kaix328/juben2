@@ -1,9 +1,11 @@
 /**
- * React Query 配置
- * 提供全局的查询客户端配置
+ * React Query 持久化缓存配置
+ * 将查询结果持久化到 localStorage，提升用户体验
  */
 
 import { QueryClient } from '@tanstack/react-query';
+import { persistQueryClient } from '@tanstack/react-query-persist-client';
+import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 
 /**
  * 创建 QueryClient 实例
@@ -18,7 +20,7 @@ export const queryClient = new QueryClient({
       // 缓存时间（10分钟）
       gcTime: 10 * 60 * 1000,
       
-      // 窗口重新获得焦点时重新获取数据
+      // 窗口重新获得焦点时不自动重新获取数据
       refetchOnWindowFocus: false,
       
       // 网络重新连接时重新获取数据
@@ -41,6 +43,45 @@ export const queryClient = new QueryClient({
       onError: (error) => {
         console.error('Mutation error:', error);
       },
+    },
+  },
+});
+
+/**
+ * 🆕 创建持久化存储器
+ * 使用 localStorage 持久化查询缓存
+ */
+const persister = createSyncStoragePersister({
+  storage: window.localStorage,
+  key: 'screenplay-creator-cache',
+  // 序列化和反序列化函数
+  serialize: (data) => JSON.stringify(data),
+  deserialize: (data) => JSON.parse(data),
+});
+
+/**
+ * 🆕 配置持久化
+ * 将查询结果持久化到 localStorage
+ */
+persistQueryClient({
+  queryClient,
+  persister,
+  maxAge: 24 * 60 * 60 * 1000, // 24小时
+  // 只持久化特定的查询
+  dehydrateOptions: {
+    shouldDehydrateQuery: (query) => {
+      // 只持久化成功的查询
+      const queryIsReadyToDehydrate = query.state.status === 'success';
+      
+      // 排除某些不需要持久化的查询
+      const queryKey = query.queryKey[0] as string;
+      const shouldNotPersist = [
+        'temp',
+        'realtime',
+        'volatile',
+      ].some(key => queryKey?.includes(key));
+      
+      return queryIsReadyToDehydrate && !shouldNotPersist;
     },
   },
 });
@@ -213,5 +254,42 @@ export const invalidateHelpers = {
         queryKey: queryKeys.assets.all,
       });
     }
+  },
+};
+
+/**
+ * 🆕 清理缓存辅助函数
+ */
+export const cacheHelpers = {
+  /**
+   * 清理所有缓存
+   */
+  clearAll() {
+    queryClient.clear();
+    localStorage.removeItem('screenplay-creator-cache');
+  },
+  
+  /**
+   * 清理过期缓存
+   */
+  clearStale() {
+    queryClient.invalidateQueries({
+      predicate: (query) => query.isStale(),
+    });
+  },
+  
+  /**
+   * 获取缓存统计信息
+   */
+  getStats() {
+    const cache = queryClient.getQueryCache();
+    const queries = cache.getAll();
+    
+    return {
+      total: queries.length,
+      active: queries.filter(q => q.getObserversCount() > 0).length,
+      stale: queries.filter(q => q.isStale()).length,
+      fetching: queries.filter(q => q.state.fetchStatus === 'fetching').length,
+    };
   },
 };

@@ -11,13 +11,29 @@ import { validateStoryboard } from '../utils/validation/storyboardValidation';
  * 在 useStoryboard 中使用
  */
 export async function autoMigrateStoryboard(storyboard: any): Promise<any> {
-    if (!storyboard) return null;
+    // 安全检查：确保 storyboard 存在且有效
+    if (!storyboard) {
+        console.log('[AutoMigration] 数据为空，跳过迁移');
+        return null;
+    }
+    
+    // 确保 panels 数组存在
+    if (!storyboard.panels) {
+        console.log('[AutoMigration] panels 数组不存在，初始化为空数组');
+        storyboard.panels = [];
+    }
+    
+    // 确保 panels 是数组
+    if (!Array.isArray(storyboard.panels)) {
+        console.warn('[AutoMigration] panels 不是数组，修复为空数组');
+        storyboard.panels = [];
+    }
     
     // 检查是否需要迁移
     const needsMigration = 
         !storyboard.version || 
         storyboard.version < 2 ||
-        storyboard.panels?.some((p: any) => 
+        storyboard.panels.some((p: any) => 
             p.shotSize || p.cameraAngle || p.movementType || 
             p.aiPrompt !== undefined || p.aiVideoPrompt !== undefined || 
             p.generatedImage !== undefined
@@ -40,10 +56,12 @@ export async function autoMigrateStoryboard(storyboard: any): Promise<any> {
         if (result.success) {
             console.log('[AutoMigration] ✅ 迁移成功');
             
-            // 验证迁移后的数据
-            const validation = validateStoryboard(migratedStoryboard);
-            if (!validation.success) {
-                console.warn('[AutoMigration] ⚠️ 迁移后数据验证失败：', validation.errors);
+            // 验证迁移后的数据（安全检查）
+            if (migratedStoryboard && migratedStoryboard.panels) {
+                const validation = validateStoryboard(migratedStoryboard);
+                if (!validation.success) {
+                    console.warn('[AutoMigration] ⚠️ 迁移后数据验证失败：', validation.errors);
+                }
             }
             
             return migratedStoryboard;
