@@ -1,4 +1,4 @@
-import{m as F,g as m}from"./index-CISsqRHR.js";import{p as I}from"./json-parser-CXOZlHMe.js";import{P as E}from"./promptEngine-BiXWbuHG.js";async function B(C,x,$){const f=new Set;x.forEach(u=>{var i;u.characters&&Array.isArray(u.characters)&&u.characters.forEach(l=>f.add(l)),(i=u.dialogues)==null||i.forEach(l=>f.add(l.character))});const d=new E($,{includeNegative:!1}),O=C.substring(0,3e4),T=`你是一个专业的剧本分析助手。请严格按照以下 JSON Schema 提取信息，确保字段名完全一致。
+import{m as F,g as m}from"./index-uU-h5OZR.js";import{p as I}from"./json-parser-CXOZlHMe.js";import{P as E}from"./promptEngine-BH9kCndw.js";async function B(C,x,$){const f=new Set;x.forEach(u=>{var i;u.characters&&Array.isArray(u.characters)&&u.characters.forEach(l=>f.add(l)),(i=u.dialogues)==null||i.forEach(l=>f.add(l.character))});const d=new E($,{includeNegative:!1}),O=C.substring(0,3e4),T=`你是一个专业的剧本分析助手。请严格按照以下 JSON Schema 提取信息，确保字段名完全一致。
 
 **JSON Schema（必须严格遵守）：**
 {
