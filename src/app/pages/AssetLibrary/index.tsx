@@ -11,12 +11,14 @@ import { useAssetUsage } from './hooks/useAssetUsage';
 import { useRelationGraph } from '../../hooks/useRelationGraph';
 import { useAutoBackup } from '../../hooks/useAutoBackup';
 import { useAssetAnalytics } from '../../hooks/useAssetAnalytics';
+import { useDevice } from '../../hooks/useDevice';
 
 // Components
 import { AssetLibraryHeader } from './components/AssetLibraryHeader';
 import { AssetStatsPanel } from './components/AssetStatsPanel';
 import { ExtractDialog } from './components/ExtractDialog';
 import { StyleApplicationDialog } from '../../components/StyleApplicationDialog';
+import { MobileAlert } from '../../components/MobileAlert';
 import {
     CharacterTab,
     SceneTab,
@@ -39,6 +41,9 @@ export function AssetLibrary() {
     const { projectId } = useParams<{ projectId: string }>();
     const navigate = useNavigate();
     const location = useLocation();
+
+    // 移动端检测
+    const device = useDevice();
 
     // 1. 数据管理 Hook
     const {
@@ -402,7 +407,12 @@ export function AssetLibrary() {
     if (!projectId) return null;
 
     return (
-        <div className="space-y-6 pb-20">
+        <div className="space-y-4 md:space-y-6 pb-20 md:pb-6 px-4 md:px-0">
+            {/* 移动端提示 */}
+            {!device.isDesktop && (
+                <MobileAlert page="assets" dismissible />
+            )}
+            
             <AssetLibraryHeader
                 projectId={projectId}
                 projectName={project?.title}
@@ -446,7 +456,7 @@ export function AssetLibrary() {
                 </CardHeader>
                 <CardContent>
                     <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-                        <TabsList className="grid w-full grid-cols-4 bg-gray-100">
+                        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 bg-gray-100">
                             <TabsTrigger value="character">
                                 角色 ({assets?.characters.length || 0})
                             </TabsTrigger>
