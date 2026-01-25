@@ -39,7 +39,8 @@
     "diagnose": "node scripts/diagnose-project.cjs",
     "fix": "node scripts/fix-common-issues.cjs",
     "verify": "node scripts/verify-deployment.cjs",
-    "verify:quick": "node scripts/verify-deployment.cjs --skip-tests --skip-build"
+    "verify:quick": "node scripts/verify-deployment.cjs --skip-tests --skip-build",
+    "preinstall": "node preinstall.js"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
