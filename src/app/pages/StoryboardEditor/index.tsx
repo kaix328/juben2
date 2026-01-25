@@ -301,9 +301,9 @@ export function StoryboardEditor() {
 
   return (
     <StoryboardProvider value={contextValue}>
-      <div className="min-h-screen bg-gray-50/50 pb-32 flex flex-col">
+      <div className="min-h-screen bg-gray-50/50 pb-32 flex flex-col px-2 md:px-4">
         {/* 顶栏 */}
-        <div className="sticky top-[64px] z-40 bg-white border-b shadow-sm">
+        <div className="sticky top-[64px] z-40 bg-white border-b shadow-sm px-2 md:px-4">
           <StoryboardHeader
             viewMode={viewMode as any}
             setViewMode={uiHooks.setViewMode as any}

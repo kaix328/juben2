@@ -549,7 +549,7 @@ export function ScriptEditor() {
                 onAddScene={handleAddScene}
             />
 
-            <Card>
+            <Card className="mx-0 md:mx-auto">
                 {/* 头部工具栏 */}
                 <ScriptEditorHeader
                     chapterTitle={chapter.title}
@@ -585,7 +585,7 @@ export function ScriptEditor() {
                     batchMode={batchMode}
                 />
 
-                <CardContent className="space-y-6">
+                <CardContent className="space-y-4 md:space-y-6 px-4 md:px-0">
                     {/* AI 提取进度 */}
                     {(isExtracting || isPaused) && extractProgress && (
                         <ExtractProgressIndicator
