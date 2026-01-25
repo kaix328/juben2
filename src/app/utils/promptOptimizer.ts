@@ -321,3 +321,113 @@ export function getOptimizationStats(
         optimizedCount
     };
 }
+
+/**
+ * 批量应用导演风格到角色
+ */
+export function batchApplyStyleToCharacters(
+    characters: Character[],
+    directorStyle: DirectorStyle
+): Character[] {
+    console.log(`[Style Sync] 开始同步 ${characters.length} 个角色的风格...`);
+    
+    return characters.map(char => {
+        const stylePrefix = directorStyle.visualStyle 
+            ? `${directorStyle.visualStyle}风格，` 
+            : '';
+        
+        const updatedChar = { ...char };
+        
+        // 更新全身图提示词
+        if (updatedChar.fullBodyPrompt) {
+            updatedChar.fullBodyPrompt = `${stylePrefix}${updatedChar.fullBodyPrompt}`;
+        }
+        
+        // 更新面部图提示词
+        if (updatedChar.facePrompt) {
+            updatedChar.facePrompt = `${stylePrefix}${updatedChar.facePrompt}`;
+        }
+        
+        return updatedChar;
+    });
+}
+
+/**
+ * 批量应用导演风格到场景
+ */
+export function batchApplyStyleToScenes(
+    scenes: Scene[],
+    directorStyle: DirectorStyle
+): Scene[] {
+    console.log(`[Style Sync] 开始同步 ${scenes.length} 个场景的风格...`);
+    
+    return scenes.map(scene => {
+        const stylePrefix = directorStyle.visualStyle 
+            ? `${directorStyle.visualStyle}风格，` 
+            : '';
+        
+        const updatedScene = { ...scene };
+        
+        // 更新各种景别的提示词
+        if (updatedScene.widePrompt) {
+            updatedScene.widePrompt = `${stylePrefix}${updatedScene.widePrompt}`;
+        }
+        if (updatedScene.mediumPrompt) {
+            updatedScene.mediumPrompt = `${stylePrefix}${updatedScene.mediumPrompt}`;
+        }
+        if (updatedScene.closeupPrompt) {
+            updatedScene.closeupPrompt = `${stylePrefix}${updatedScene.closeupPrompt}`;
+        }
+        
+        return updatedScene;
+    });
+}
+
+/**
+ * 批量应用导演风格到道具
+ */
+export function batchApplyStyleToProps(
+    props: any[],
+    directorStyle: DirectorStyle
+): any[] {
+    console.log(`[Style Sync] 开始同步 ${props.length} 个道具的风格...`);
+    
+    return props.map(prop => {
+        const stylePrefix = directorStyle.visualStyle 
+            ? `${directorStyle.visualStyle}风格，` 
+            : '';
+        
+        const updatedProp = { ...prop };
+        
+        if (updatedProp.aiPrompt) {
+            updatedProp.aiPrompt = `${stylePrefix}${updatedProp.aiPrompt}`;
+        }
+        
+        return updatedProp;
+    });
+}
+
+/**
+ * 批量应用导演风格到服饰
+ */
+export function batchApplyStyleToCostumes(
+    costumes: any[],
+    characters: Character[],
+    directorStyle: DirectorStyle
+): any[] {
+    console.log(`[Style Sync] 开始同步 ${costumes.length} 个服饰的风格...`);
+    
+    return costumes.map(costume => {
+        const stylePrefix = directorStyle.visualStyle 
+            ? `${directorStyle.visualStyle}风格，` 
+            : '';
+        
+        const updatedCostume = { ...costume };
+        
+        if (updatedCostume.aiPrompt) {
+            updatedCostume.aiPrompt = `${stylePrefix}${updatedCostume.aiPrompt}`;
+        }
+        
+        return updatedCostume;
+    });
+}
