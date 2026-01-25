@@ -72,6 +72,10 @@ export function ScriptEditor() {
     const [showReplaceDialog, setShowReplaceDialog] = useState(false);
     const [showFiveElementsDialog, setShowFiveElementsDialog] = useState(false);
     const [showBackupDialog, setShowBackupDialog] = useState(false);
+    const [showImportDialog, setShowImportDialog] = useState(false);
+    const [showTemplatesDialog, setShowTemplatesDialog] = useState(false);
+    const [showContinuityDialog, setShowContinuityDialog] = useState(false);
+    const [showOutlineDialog, setShowOutlineDialog] = useState(false); // 🆕
     const [findText, setFindText] = useState('');
     const [replaceText, setReplaceText] = useState('');
 
@@ -313,6 +317,131 @@ export function ScriptEditor() {
         }
     }, [script, chapter]);
 
+    // 🆕 导出为 Fountain 格式
+    const handleExportFountain = useCallback(async () => {
+        if (!script || !chapter) return;
+        try {
+            const { scriptConverter, downloadScript } = await import('../../utils/scriptFormats');
+            
+            // 转换为 ParsedScript 格式
+            const parsedScript = {
+                title: chapter.title,
+                author: '',
+                elements: script.scenes.flatMap(scene => [
+                    {
+                        type: 'scene_heading' as const,
+                        content: `${scene.sceneType}. ${scene.location} - ${scene.timeOfDay}`.toUpperCase()
+                    },
+                    ...(scene.action ? [{
+                        type: 'action' as const,
+                        content: scene.action
+                    }] : []),
+                    ...scene.dialogues.flatMap(d => [
+                        {
+                            type: 'character' as const,
+                            content: d.character,
+                            metadata: {
+                                dialogue: [{
+                                    type: d.parenthetical ? 'parenthetical' as const : 'dialogue' as const,
+                                    content: d.parenthetical || d.lines
+                                }]
+                            }
+                        }
+                    ])
+                ]),
+                metadata: {}
+            };
+
+            downloadScript(parsedScript, { format: 'fountain' });
+            toast.success('已导出为 Fountain 格式');
+        } catch (error) {
+            console.error(error);
+            toast.error('导出失败');
+        }
+    }, [script, chapter]);
+
+    // 🆕 导出为 Final Draft 格式
+    const handleExportFDX = useCallback(async () => {
+        if (!script || !chapter) return;
+        try {
+            const { scriptConverter, downloadScript } = await import('../../utils/scriptFormats');
+            
+            // 转换为 ParsedScript 格式
+            const parsedScript = {
+                title: chapter.title,
+                author: '',
+                elements: script.scenes.flatMap(scene => [
+                    {
+                        type: 'scene_heading' as const,
+                        content: `${scene.sceneType}. ${scene.location} - ${scene.timeOfDay}`.toUpperCase()
+                    },
+                    ...(scene.action ? [{
+                        type: 'action' as const,
+                        content: scene.action
+                    }] : []),
+                    ...scene.dialogues.flatMap(d => [
+                        {
+                            type: 'character' as const,
+                            content: d.character,
+                            metadata: {
+                                dialogue: [{
+                                    type: d.parenthetical ? 'parenthetical' as const : 'dialogue' as const,
+                                    content: d.parenthetical || d.lines
+                                }]
+                            }
+                        }
+                    ])
+                ]),
+                metadata: {}
+            };
+
+            downloadScript(parsedScript, { format: 'fdx' });
+            toast.success('已导出为 Final Draft 格式');
+        } catch (error) {
+            console.error(error);
+            toast.error('导出失败');
+        }
+    }, [script, chapter]);
+
+    // 🆕 导入剧本
+    const handleImportScript = useCallback((scenes: ScriptScene[]) => {
+        if (scenes.length === 0) {
+            toast.error('导入的剧本为空');
+            return;
+        }
+
+        // 替换当前剧本
+        handleUpdateScenes(scenes);
+        toast.success(`成功导入 ${scenes.length} 个场景`);
+    }, [handleUpdateScenes]);
+
+    // 🆕 应用模板
+    const handleSelectTemplate = useCallback((scenes: ScriptScene[]) => {
+        if (scenes.length === 0) {
+            toast.error('模板为空');
+            return;
+        }
+
+        // 替换当前剧本
+        handleUpdateScenes(scenes);
+        toast.success(`已应用模板，共 ${scenes.length} 个场景`);
+    }, [handleUpdateScenes]);
+
+    // 🆕 跳转到场景
+    const handleJumpToScene = useCallback((sceneNumber: number) => {
+        // 滚动到指定场景
+        const sceneElement = document.querySelector(`[data-scene-number="${sceneNumber}"]`);
+        if (sceneElement) {
+            sceneElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // 高亮场景
+            sceneElement.classList.add('ring-2', 'ring-blue-500');
+            setTimeout(() => {
+                sceneElement.classList.remove('ring-2', 'ring-blue-500');
+            }, 2000);
+        }
+        toast.info(`已跳转到场景 ${sceneNumber}`);
+    }, []);
+
     // 🆕 AI 批量润色
     const handleBatchPolish = useCallback(async (instruction: string) => {
         if (!script || selectedScenes.size === 0) return;
@@ -404,6 +533,20 @@ export function ScriptEditor() {
                 showBackupDialog={showBackupDialog}
                 onBackupDialogChange={setShowBackupDialog}
                 onRestoreBackup={handleRestoreBackup}
+                showImportDialog={showImportDialog}
+                onImportDialogChange={setShowImportDialog}
+                onImportScript={handleImportScript}
+                showTemplatesDialog={showTemplatesDialog}
+                onTemplatesDialogChange={setShowTemplatesDialog}
+                onSelectTemplate={handleSelectTemplate}
+                showContinuityDialog={showContinuityDialog}
+                onContinuityDialogChange={setShowContinuityDialog}
+                onJumpToScene={handleJumpToScene}
+                showOutlineDialog={showOutlineDialog}
+                onOutlineDialogChange={setShowOutlineDialog}
+                onUpdateScene={handleUpdateScene}
+                onDeleteScene={handleDeleteScene}
+                onAddScene={handleAddScene}
             />
 
             <Card>
@@ -427,11 +570,17 @@ export function ScriptEditor() {
                     onShowReplace={() => setShowReplaceDialog(true)}
                     onShowFiveElements={() => setShowFiveElementsDialog(true)}
                     onShowBackup={() => setShowBackupDialog(true)}
+                    onShowImport={() => setShowImportDialog(true)}
+                    onShowTemplates={() => setShowTemplatesDialog(true)}
+                    onShowContinuityCheck={() => setShowContinuityDialog(true)}
+                    onShowOutline={() => setShowOutlineDialog(true)}
                     onExportMarkdown={handleExportMarkdown}
                     onExportText={handleExportText}
                     onExportPDF={handleExportPDF}
                     onExportHTML={handleExportHTML}
                     onExportWord={handleExportWord}
+                    onExportFountain={handleExportFountain}
+                    onExportFDX={handleExportFDX}
                     isExtracting={isExtracting}
                     batchMode={batchMode}
                 />

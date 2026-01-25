@@ -117,6 +117,7 @@ export function DraggableSceneCard({
       ref={ref}
       style={{ opacity }}
       data-handler-id={handlerId}
+      data-scene-number={scene.sceneNumber}
       className="transition-opacity"
     >
       <SceneCard

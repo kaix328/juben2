@@ -73,7 +73,7 @@ export function ScriptEditorSceneList({
     return (
         <div className="space-y-6">
             {scenes.map((scene) => (
-                <div key={scene.id} className="border-b pb-6">
+                <div key={scene.id} data-scene-number={scene.sceneNumber} className="border-b pb-6">
                     <h3 className="font-bold text-lg mb-2">
                         {formatSceneHeading(scene)}
                     </h3>

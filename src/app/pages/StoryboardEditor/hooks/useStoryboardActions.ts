@@ -670,6 +670,67 @@ export function useStoryboardActions({
         }
     }, [assets, project]);
 
+    // 🆕 批量生成视频提示词
+    const handleBatchGenerateVideoPrompts = useCallback(async (
+        selectedIds: Set<string>,
+        platform: VideoPlatform = 'runway',
+        onProgress?: (current: number, total: number) => void,
+        onComplete?: () => void
+    ) => {
+        if (!storyboard || !assets || !project) {
+            toast.error('项目信息未加载');
+            return;
+        }
+
+        const total = selectedIds.size;
+        let current = 0;
+
+        toast.loading(`正在生成 ${total} 个视频提示词...`, { id: 'batch-video-prompts' });
+
+        try {
+            // 创建增强的 PromptEngine
+            const engine = new PromptEngine(project.directorStyle, {
+                useProfessionalSkills: true,
+                targetPlatform: platform,
+                includeNegative: false,
+                qualityTags: 'professional',
+            });
+
+            // 批量生成视频提示词
+            const updatedPanels = storyboard.panels.map((panel, index) => {
+                if (!selectedIds.has(panel.id)) return panel;
+
+                // 获取前一个分镜（用于上下文感知）
+                const prevPanel = index > 0 ? storyboard.panels[index - 1] : undefined;
+
+                // 生成视频提示词
+                const result = engine.forStoryboardVideo(
+                    panel,
+                    assets.characters,
+                    assets.scenes,
+                    prevPanel
+                );
+
+                current++;
+                onProgress?.(current, total);
+
+                return {
+                    ...panel,
+                    aiVideoPrompt: result.positive,
+                };
+            });
+
+            // 保存更新
+            await onUpdateStoryboard({ ...storyboard, panels: updatedPanels });
+
+            toast.success(`已生成 ${total} 个视频提示词（${platform}格式）`, { id: 'batch-video-prompts' });
+            onComplete?.();
+        } catch (error) {
+            console.error('[BatchGenerateVideoPrompts] Error:', error);
+            toast.error('批量生成视频提示词失败', { id: 'batch-video-prompts' });
+        }
+    }, [storyboard, assets, project, onUpdateStoryboard]);
+
     // 🆕 一键优化功能
     const handleOptimizeIssues = useCallback(async (
         selectedIssues: any[]
@@ -922,6 +983,7 @@ export function useStoryboardActions({
         // v2.0: 新增方法
         handleGenerateVideoPrompt,
         handlePreviewPrompt,
+        handleBatchGenerateVideoPrompts, // 🆕 批量生成视频提示词
         handleOptimizeIssues, // 🆕 一键优化
         // 队列控制方法
         cancelAllTasks: () => queue.cancelAll(),

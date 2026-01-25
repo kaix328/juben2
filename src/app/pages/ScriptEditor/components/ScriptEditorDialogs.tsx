@@ -5,7 +5,11 @@ import { Label } from '../../../components/ui/label';
 import { Button } from '../../../components/ui/button';
 import { StoryFiveElementsAnalyzer } from '../../../components/StoryFiveElementsAnalyzer';
 import { BackupManagerDialog } from './BackupManagerDialog';
-import type { Script } from '../types';
+import { ImportScriptDialog } from '../../../components/script/ImportScriptDialog';
+import { ScriptTemplateLibrary } from '../../../components/script/ScriptTemplateLibrary';
+import { SceneContinuityChecker } from '../../../components/script/SceneContinuityChecker';
+import { ScriptOutlineView } from '../../../components/script/ScriptOutlineView';
+import type { Script, ScriptScene } from '../types';
 
 interface ScriptEditorDialogsProps {
     // 查找替换对话框
@@ -30,6 +34,28 @@ interface ScriptEditorDialogsProps {
     showBackupDialog: boolean;
     onBackupDialogChange: (show: boolean) => void;
     onRestoreBackup: (script: any) => void;
+
+    // 导入剧本对话框
+    showImportDialog: boolean;
+    onImportDialogChange: (show: boolean) => void;
+    onImportScript: (scenes: ScriptScene[]) => void;
+
+    // 模板库对话框
+    showTemplatesDialog: boolean;
+    onTemplatesDialogChange: (show: boolean) => void;
+    onSelectTemplate: (scenes: ScriptScene[]) => void;
+
+    // 连贯性检查对话框
+    showContinuityDialog: boolean;
+    onContinuityDialogChange: (show: boolean) => void;
+    onJumpToScene: (sceneNumber: number) => void;
+
+    // 🆕 大纲视图对话框
+    showOutlineDialog: boolean;
+    onOutlineDialogChange: (show: boolean) => void;
+    onUpdateScene: (sceneId: string, updates: Partial<ScriptScene>) => void;
+    onDeleteScene: (sceneId: string) => void;
+    onAddScene: () => void;
 }
 
 export function ScriptEditorDialogs({
@@ -50,6 +76,20 @@ export function ScriptEditorDialogs({
     showBackupDialog,
     onBackupDialogChange,
     onRestoreBackup,
+    showImportDialog,
+    onImportDialogChange,
+    onImportScript,
+    showTemplatesDialog,
+    onTemplatesDialogChange,
+    onSelectTemplate,
+    showContinuityDialog,
+    onContinuityDialogChange,
+    onJumpToScene,
+    showOutlineDialog,
+    onOutlineDialogChange,
+    onUpdateScene,
+    onDeleteScene,
+    onAddScene,
 }: ScriptEditorDialogsProps) {
     return (
         <>
@@ -121,6 +161,43 @@ export function ScriptEditorDialogs({
                     onOpenChange={onBackupDialogChange}
                     chapterId={chapterId}
                     onRestore={onRestoreBackup}
+                />
+            )}
+
+            {/* 导入剧本对话框 */}
+            <ImportScriptDialog
+                open={showImportDialog}
+                onOpenChange={onImportDialogChange}
+                onImport={onImportScript}
+            />
+
+            {/* 模板库对话框 */}
+            <ScriptTemplateLibrary
+                open={showTemplatesDialog}
+                onOpenChange={onTemplatesDialogChange}
+                onSelectTemplate={onSelectTemplate}
+            />
+
+            {/* 连贯性检查对话框 */}
+            {script && (
+                <SceneContinuityChecker
+                    open={showContinuityDialog}
+                    onOpenChange={onContinuityDialogChange}
+                    script={script}
+                    onJumpToScene={onJumpToScene}
+                />
+            )}
+
+            {/* 🆕 大纲视图对话框 */}
+            {script && (
+                <ScriptOutlineView
+                    open={showOutlineDialog}
+                    onOpenChange={onOutlineDialogChange}
+                    script={script}
+                    onJumpToScene={onJumpToScene}
+                    onUpdateScene={onUpdateScene}
+                    onDeleteScene={onDeleteScene}
+                    onAddScene={onAddScene}
                 />
             )}
         </>

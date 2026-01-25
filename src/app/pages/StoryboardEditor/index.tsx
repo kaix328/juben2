@@ -39,6 +39,8 @@ import type { QualityReport } from '../../utils/ai/qualityChecker';
 
 // 🆕 提示词预览
 import { PromptPreviewDialog } from '../../components/storyboard/PromptPreviewDialog';
+import { ExportPromptsDialog } from '../../components/storyboard/ExportPromptsDialog';
+import { VideoPromptGenerationDialog } from '../../components/storyboard/VideoPromptGenerationDialog';
 import type { StoryboardPanel } from '../../types';
 
 export function StoryboardEditor() {
@@ -59,6 +61,12 @@ export function StoryboardEditor() {
   // 🆕 提示词预览状态
   const [showPromptPreview, setShowPromptPreview] = useState(false);
   const [selectedPanelForPrompt, setSelectedPanelForPrompt] = useState<StoryboardPanel | null>(null);
+
+  // 🆕 导出提示词对话框状态
+  const [showExportDialog, setShowExportDialog] = useState(false);
+
+  // 🆕 批量生成视频提示词对话框状态
+  const [showVideoPromptDialog, setShowVideoPromptDialog] = useState(false);
 
   // 1. 数据层
   const dataHooks = useStoryboardData({ chapterId });
@@ -479,6 +487,8 @@ export function StoryboardEditor() {
                 actionHooks.retryFailedTasks();
               }}
               failedCount={actionHooks.getQueueStats().failed}
+              onExportPrompts={() => setShowExportDialog(true)}
+              onBatchGenerateVideoPrompts={() => setShowVideoPromptDialog(true)}
             />
           </div>
         </div>
@@ -524,6 +534,42 @@ export function StoryboardEditor() {
             onUpdate={(params) => {
               dataHooks.handleUpdatePanel(selectedPanelForPrompt.id, params);
               setShowPromptPreview(false);
+            }}
+          />
+        )}
+
+        {/* 🆕 导出提示词对话框 */}
+        <ExportPromptsDialog
+          open={showExportDialog}
+          onOpenChange={setShowExportDialog}
+          panels={filteredPanels}
+          characters={assets?.characters || []}
+          scenes={assets?.scenes || []}
+          directorStyle={project?.directorStyle}
+          storyboardTitle={storyboard?.title || project?.title || '分镜提示词'}
+        />
+
+        {/* 🆕 批量生成视频提示词对话框 */}
+        {showVideoPromptDialog && (
+          <VideoPromptGenerationDialog
+            open={showVideoPromptDialog}
+            onOpenChange={setShowVideoPromptDialog}
+            panels={filteredPanels}
+            selectedPanels={selectedPanels}
+            onGenerate={async (platform) => {
+              const idsToGenerate = selectedPanels.size > 0
+                ? selectedPanels
+                : new Set(filteredPanels.map(p => p.id));
+              
+              await actionHooks.handleBatchGenerateVideoPrompts(
+                idsToGenerate,
+                platform,
+                (curr, tot) => uiHooks.setBatchProgress({ current: curr, total: tot }),
+                () => {
+                  uiHooks.setBatchProgress(null);
+                  setShowVideoPromptDialog(false);
+                }
+              );
             }}
           />
         )}

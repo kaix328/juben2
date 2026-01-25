@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Trash2, Settings2, Wand2, Plus, Layers, Play, XCircle, RotateCcw, Palette } from 'lucide-react';
+import { Check, Trash2, Settings2, Wand2, Plus, Layers, Play, XCircle, RotateCcw, Palette, Download, Video } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { QUICK_PRESETS, SCENE_TEMPLATES } from '../../pages/StoryboardEditor/presets';
@@ -24,6 +24,8 @@ interface BatchActionBarProps {
     onCancelGeneration?: () => void;  // 🆕 取消生成
     onRetryFailed?: () => void;       // 🆕 重试失败
     failedCount?: number;              // 🆕 失败数量
+    onExportPrompts?: () => void;      // 🆕 导出提示词
+    onBatchGenerateVideoPrompts?: () => void;  // 🆕 批量生成视频提示词
 }
 
 export function BatchActionBar({
@@ -44,6 +46,8 @@ export function BatchActionBar({
     onCancelGeneration,  // 🆕
     onRetryFailed,       // 🆕
     failedCount = 0,     // 🆕
+    onExportPrompts,     // 🆕
+    onBatchGenerateVideoPrompts,  // 🆕
 }: BatchActionBarProps) {
     if (filteredPanelsCount === 0) return null;
 
@@ -202,6 +206,32 @@ export function BatchActionBar({
                                 </SelectContent>
                             </Select>
                         </>
+                    )}
+
+                    {/* 🆕 批量生成视频提示词 */}
+                    {onBatchGenerateVideoPrompts && (
+                        <Button
+                            onClick={onBatchGenerateVideoPrompts}
+                            variant="outline"
+                            size="sm"
+                            className="gap-2 bg-pink-50 border-pink-300 text-pink-700 hover:bg-pink-100"
+                        >
+                            <Video className="w-4 h-4" />
+                            生成视频提示词
+                        </Button>
+                    )}
+
+                    {/* 🆕 导出提示词按钮 */}
+                    {onExportPrompts && (
+                        <Button
+                            onClick={onExportPrompts}
+                            variant="outline"
+                            size="sm"
+                            className="gap-2 bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100"
+                        >
+                            <Download className="w-4 h-4" />
+                            导出提示词
+                        </Button>
                     )}
 
                     {/* 一键生成全部按钮 */}

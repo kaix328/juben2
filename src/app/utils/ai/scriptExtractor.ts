@@ -7,6 +7,7 @@ import { generateId } from '../storage';
 
 import { callDeepSeek, parseJSON } from '../volcApi';
 import { splitTextIntoChunks } from './utils';
+import { AIAccuracyOptimizer, ResultValidator, SmartFixer } from './accuracyOptimizer';
 
 
 // 剧本模式配置
@@ -241,7 +242,7 @@ export async function extractScript(
         }
     }
 
-    const prompt = `你是一位拥有20年经验的专业编剧。请将以下文本改编为标准影视剧本格式。
+    const basePrompt = `你是一位拥有20年经验的专业编剧。请将以下文本改编为标准影视剧本格式。
 
 【剧本类型】${modeDesc}${styleHint}
 
@@ -268,13 +269,6 @@ export async function extractScript(
 - INSERT: 插入镜头
 - INTERCUT: 交叉剪辑
 
-【重要】请严格按照以下 JSON 格式返回：
-- 必须返回有效的 JSON 数组
-- 不要使用 Markdown 代码块包裹（不要用反引号包裹）
-- 确保所有字符串值中的引号都被正确转义
-- 确保所有对象都有完整的闭合括号
-- 字符串中的换行请使用 \\n 转义
-
 JSON 格式示例：
 [
   {
@@ -297,7 +291,7 @@ JSON 格式示例：
         "extension": "V.O./O.S.（可选）",
         "parenthetical": "表演提示（可选）",
         "lines": "台词内容",
-        "isFirstAppearance": true/false,
+        "isFirstAppearance": true,
         "isContinued": false
       }
     ],
@@ -310,43 +304,21 @@ ${originalText.substring(0, 15000)}
 `;
 
     try {
-        console.log('[scriptExtractor] 开始调用 AI...');
-        const result = await callDeepSeek([{ role: 'user', content: prompt }]);
-        console.log('[scriptExtractor] AI 返回结果:', result?.substring(0, 500));
+        console.log('[scriptExtractor] 🚀 使用 AI 准确度优化器...');
+        
+        // 🆕 使用 AI 准确度优化器
+        const optimizer = new AIAccuracyOptimizer();
+        const scenes = await optimizer.optimizedExtract(basePrompt, {
+            useExamples: true,        // 使用示例学习
+            useChainOfThought: true,  // 使用分步推理
+            useSelfVerification: true, // 使用自我验证
+            maxRetries: 3,            // 最多重试 3 次
+        });
 
-        let parsedData = parseJSON(result);
-
-        // 兼容 parseJSON 可能返回 { scenes: [...] } 结构的情况
-        let scenes: any[] = [];
-        if (Array.isArray(parsedData)) {
-            scenes = parsedData;
-        } else if (parsedData && Array.isArray(parsedData.scenes)) {
-            scenes = parsedData.scenes;
-        } else {
-            console.warn('[scriptExtractor] 无法从解析结果中提取场景数组:', parsedData);
-            scenes = [];
-        }
-
-        console.log('[scriptExtractor] 解析后的场景数量:', scenes.length);
-
-        if (scenes.length === 0) {
-            console.error('[scriptExtractor] 解析结果为空！原始返回:', result);
-            throw new Error('AI 返回的数据为空或格式错误');
-        }
-
-        // 🆕 验证数据完整性
-        const validation = validateScenes(scenes);
-        if (!validation.valid) {
-            console.warn('[scriptExtractor] 数据验证失败:', validation.errors);
-            console.log('[scriptExtractor] 尝试修复不完整的数据...');
-        }
-
-        // 🆕 修复不完整的数据
-        const fixedScenes = fixIncompleteScenes(scenes);
-        console.log('[scriptExtractor] 数据修复完成，场景数量:', fixedScenes.length);
+        console.log('[scriptExtractor] ✅ 优化后的场景数量:', scenes.length);
 
         // 补全 ID 等前端需要的字段
-        return fixedScenes.map((s: any, index: number) => ({
+        return scenes.map((s: any, index: number) => ({
             id: generateId(),
             sceneNumber: s.sceneNumber || index + 1,
             episodeNumber: s.episodeNumber || 1,
@@ -375,7 +347,7 @@ ${originalText.substring(0, 15000)}
             notes: cleanScriptText(s.notes)
         }));
     } catch (error) {
-        console.error('DeepSeek extractScript failed:', error);
+        console.error('❌ DeepSeek extractScript failed:', error);
         throw new Error('AI 剧本生成失败，请检查网络或 Key');
     }
 }

@@ -8,8 +8,8 @@ import {
     DropdownMenuTrigger
 } from '../../../components/ui/dropdown-menu';
 import {
-    Sparkles, Save, Plus, BarChart3, Download,
-    CheckSquare, Undo2, Redo2, Replace, BookOpen, Clock
+    Sparkles, Save, Plus, BarChart3, Download, Upload,
+    CheckSquare, Undo2, Redo2, Replace, BookOpen, Clock, FileText, FileCode, Library, Eye, List
 } from 'lucide-react';
 import type { ScriptMode } from '../../../utils/aiService';
 
@@ -30,11 +30,17 @@ interface ScriptEditorToolbarProps {
     onShowReplace: () => void;
     onShowFiveElements: () => void;
     onShowBackup: () => void;
+    onShowImport: () => void;
+    onShowTemplates: () => void;
+    onShowContinuityCheck: () => void;
+    onShowOutline: () => void; // 🆕 大纲视图
     onExportMarkdown: () => void;
     onExportText: () => void;
     onExportPDF: () => void;
     onExportHTML: () => void;
-    onExportWord: () => void; // 🆕 Word Export
+    onExportWord: () => void;
+    onExportFountain: () => void;
+    onExportFDX: () => void;
     isExtracting: boolean;
     batchMode: boolean;
 }
@@ -63,11 +69,17 @@ export function ScriptEditorToolbar({
     onShowReplace,
     onShowFiveElements,
     onShowBackup,
+    onShowImport,
+    onShowTemplates,
+    onShowContinuityCheck,
+    onShowOutline, // 🆕
     onExportMarkdown,
     onExportText,
     onExportPDF,
     onExportHTML,
     onExportWord,
+    onExportFountain,
+    onExportFDX,
     isExtracting,
     batchMode,
 }: ScriptEditorToolbarProps) {
@@ -121,6 +133,24 @@ export function ScriptEditorToolbar({
                 </DropdownMenuContent>
             </DropdownMenu>
 
+            {/* 🆕 大纲视图按钮 */}
+            <Button onClick={onShowOutline} variant="outline" size="sm" className="gap-2">
+                <List className="w-4 h-4" />
+                大纲视图
+            </Button>
+
+            {/* 🆕 模板库按钮 */}
+            <Button onClick={onShowTemplates} variant="outline" size="sm" className="gap-2">
+                <Library className="w-4 h-4" />
+                模板库
+            </Button>
+
+            {/* 🆕 导入剧本按钮 */}
+            <Button onClick={onShowImport} variant="outline" size="sm" className="gap-2">
+                <Upload className="w-4 h-4" />
+                导入剧本
+            </Button>
+
             {/* AI 提取按钮 */}
             <Button
                 onClick={onAIExtract}
@@ -165,6 +195,12 @@ export function ScriptEditorToolbar({
                 查找替换
             </Button>
 
+            {/* 🆕 连贯性检查 */}
+            <Button onClick={onShowContinuityCheck} variant="outline" size="sm" className="gap-2">
+                <Eye className="w-4 h-4" />
+                连贯性检查
+            </Button>
+
             {/* 五元素分析 */}
             <Button onClick={onShowFiveElements} variant="outline" size="sm">
                 <BookOpen className="w-4 h-4 mr-2" />
@@ -200,6 +236,14 @@ export function ScriptEditorToolbar({
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={onExportWord}>
                         导出为 Word (.docx)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={onExportFountain} className="gap-2">
+                        <FileText className="w-4 h-4" />
+                        导出为 Fountain
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={onExportFDX} className="gap-2">
+                        <FileCode className="w-4 h-4" />
+                        导出为 Final Draft (.fdx)
                     </DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>

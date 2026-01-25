@@ -23,11 +23,17 @@ interface ScriptEditorHeaderProps {
     onShowReplace: () => void;
     onShowFiveElements: () => void;
     onShowBackup: () => void;
+    onShowImport: () => void;
+    onShowTemplates: () => void;
+    onShowContinuityCheck: () => void;
+    onShowOutline: () => void; // 🆕
     onExportMarkdown: () => void;
     onExportText: () => void;
     onExportPDF: () => void;
     onExportHTML: () => void;
     onExportWord: () => void;
+    onExportFountain: () => void;
+    onExportFDX: () => void;
     isExtracting: boolean;
     batchMode: boolean;
 }

@@ -23,3 +23,13 @@ export { extractAssets, type ExtractedAssets } from './assetExtractor';
 
 // 故事五元素分析
 export { StoryAnalyzer, analyzeStoryFiveElements, formatFiveElementsReport } from './storyAnalyzer';
+
+// 🆕 AI 准确度优化
+export {
+  AIAccuracyOptimizer,
+  EnhancedPromptBuilder,
+  ResultValidator,
+  SmartFixer,
+  RetryStrategy,
+  PROMPT_STRATEGIES,
+} from './accuracyOptimizer';
