@@ -41,6 +41,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ScriptScene } from '../../pages/ScriptEditor/types';
+import { generateId } from '../../utils/storage';
 
 interface ScriptTemplate {
   id: string;
@@ -792,7 +793,6 @@ export function ScriptTemplateLibrary({
     if (!selectedTemplate) return;
 
     // 生成完整的场景数据
-    const { generateId } = require('../../utils/storage');
     const scenes: ScriptScene[] = selectedTemplate.scenes.map((scene, index) => ({
       id: generateId(),
       sceneNumber: index + 1,
